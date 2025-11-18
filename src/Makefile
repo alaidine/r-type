@@ -29,16 +29,16 @@
 PLATFORM              ?= PLATFORM_DESKTOP
 
 # Define project variables
-PROJECT_NAME          ?= raylib_game
+PROJECT_NAME          ?= r-type
 PROJECT_VERSION       ?= 1.0
 PROJECT_BUILD_PATH    ?= .
 PROJECT_SOURCE_FILES  ?= \
-    raylib_game.c \
-    screen_logo.c \
-    screen_title.c \
-    screen_options.c \
-    screen_gameplay.c \
-    screen_ending.c
+    raylib_game.cpp \
+    screen_logo.cpp \
+    screen_title.cpp \
+    screen_options.cpp \
+    screen_gameplay.cpp \
+    screen_ending.cpp
 
 # raylib library variables
 RAYLIB_SRC_PATH       ?= ../../raylib/src
