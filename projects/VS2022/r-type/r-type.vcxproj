@@ -37,8 +37,8 @@
   <PropertyGroup Label="Globals">
     <ProjectGuid>{0981CA98-E4A5-4DF1-987F-A41D09131EFC}</ProjectGuid>
     <Keyword>Win32Proj</Keyword>
-    <RootNamespace>raylib_game</RootNamespace>
-    <ProjectName>raylib_game</ProjectName>
+    <RootNamespace>r-type</RootNamespace>
+    <ProjectName>r-type</ProjectName>
     <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
