@@ -58,8 +58,8 @@ typedef struct tagMSG* LPMSG;
 
 #endif // WINDOWS
 
-#define RAYLIB_EXAMPLE_PROTOCOL_NAME "raylib-example"
-#define RAYLIB_EXAMPLE_PORT 42042
+#define PROTOCOL_NAME "example"
+#define PORT 42042
 
 // nbnet logging, use raylib logging
 
@@ -151,6 +151,13 @@ typedef struct
     float ping;
     float jitter;
 } Options;
+
+
+typedef enum {
+    TITLE = 0,
+    IP_ADDRESS,
+    GAMEPLAY
+} GameScreen;
 
 ChangeColorMessage* ChangeColorMessage_Create(void);
 void ChangeColorMessage_Destroy(ChangeColorMessage*);

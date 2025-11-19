@@ -2,13 +2,16 @@
 
 #include "shared.h"
 
-#define TARGET_FPS 100
+#define TARGET_FPS 60
+
+#define MAX_INPUT_CHARS 15
 
 static bool connected = false;         // Connected to the server
 static bool disconnected = false;      // Got disconnected from the server
 static bool spawned = false;           // Has spawned
 static int server_close_code;          // The server code used when closing the connection
 static ClientState local_client_state; // The state of the local client
+static GameScreen currentScreen = TITLE;
 
 // Array to hold other client states (`MAX_CLIENTS - 1` because we don't need to store the state of the local client)
 static ClientState* clients[MAX_CLIENTS - 1] = { NULL };
@@ -397,9 +400,6 @@ void Draw(void)
 
         // Then draw the local client
         DrawClient(&local_client_state, true);
-
-        // Finally draw the HUD
-        DrawHUD();
     }
     else
     {
@@ -409,80 +409,19 @@ void Draw(void)
     EndDrawing();
 }
 
-static double tick_dt = 1.0 / TICK_RATE; // Tick delta time (in seconds)
-static double acc = 0;
-
-void UpdateAndDraw(void)
+void InitClient(char *serverIp)
 {
-    // Very basic fixed timestep implementation.
-    // Target FPS is either 100 (in desktop) or whatever the browser frame rate is (in web) but the simulation runs at
-    // TICK_RATE ticks per second.
-    //
-    // We keep track of accumulated times and simulates as many tick as we can using that time
-
-    acc += GetFrameTime(); // Accumulates time
-
-    // Simulates as many ticks as we can
-    while (acc >= tick_dt)
-    {
-        int ev;
-
-        while ((ev = NBN_GameClient_Poll()) != NBN_NO_EVENT)
-        {
-            if (ev < 0)
-            {
-                TraceLog(LOG_WARNING, "An occured while polling network events. Exit");
-
-                break;
-            }
-
-            HandleGameClientEvent(ev);
-        }
-
-        if (connected && !disconnected)
-        {
-            if (Update() < 0)
-                break;
-        }
-
-        if (!disconnected)
-        {
-            if (NBN_GameClient_SendPackets() < 0)
-            {
-                TraceLog(LOG_ERROR, "An occured while flushing the send queue. Exit");
-
-                break;
-            }
-        }
-
-        acc -= tick_dt; // Consumes time
-    }
-
-    Draw();
-}
-
-int main(int argc, char* argv[])
-{
-    (void)argc;
-    (void)argv;
-
-    SetTraceLogLevel(LOG_DEBUG);
-
-    InitWindow(GAME_WIDTH, GAME_HEIGHT, "R-Type");
-
-    SetTargetFPS(TARGET_FPS);
-
     NBN_UDP_Register();
 
     // Initialize the client with a protocol name (must be the same than the one used by the server), the server ip address and port
 
     // Start the client with a protocol name (must be the same than the one used by the server)
     // the server host and port
-    if (NBN_GameClient_StartEx(RAYLIB_EXAMPLE_PROTOCOL_NAME, "127.0.0.1", RAYLIB_EXAMPLE_PORT, NULL, 0) < 0)
+    if (NBN_GameClient_StartEx(PROTOCOL_NAME, serverIp, PORT, NULL, 0) < 0)
     {
         TraceLog(LOG_WARNING, "Game client failed to start. Exit");
 
-        return 1;
+        return;
     }
 
     // Register messages, have to be done after NBN_GameClient_StartEx
@@ -508,6 +447,151 @@ int main(int argc, char* argv[])
     NBN_GameClient_SetJitter(GetOptions().jitter);
     NBN_GameClient_SetPacketLoss(GetOptions().packet_loss);
     NBN_GameClient_SetPacketDuplication(GetOptions().packet_duplication);
+}
+
+static double tick_dt = 1.0 / TICK_RATE; // Tick delta time (in seconds)
+static double acc = 0;
+
+char serverIp[MAX_INPUT_CHARS + 1] = "\0";      // NOTE: One extra space required for null terminator char '\0'
+int letterCount = 0;
+
+Rectangle textBox = { GAME_WIDTH / 2.0f - 100, 180, 225, 50 };
+
+int framesCounter = 0;
+
+void UpdateAndDraw()
+{
+    switch (currentScreen)
+    {
+    case TITLE: {
+        if (IsKeyPressed(KEY_ENTER) || IsGestureDetected(GESTURE_TAP))
+        {
+            TraceLog(LOG_INFO, "foobar");
+            currentScreen = IP_ADDRESS;
+        }
+
+        BeginDrawing();
+
+        ClearBackground(RAYWHITE);
+        DrawText("R-Type", 190, 200, 20, DARKGRAY);
+
+        EndDrawing();
+    } break;
+    case IP_ADDRESS: {
+        if (IsKeyPressed(KEY_ENTER))
+        {
+            InitClient(serverIp);
+            currentScreen = GAMEPLAY;
+        }
+
+        // Set the window's cursor to the I-Beam
+        SetMouseCursor(MOUSE_CURSOR_IBEAM);
+
+        // Get char pressed (unicode character) on the queue
+        int key = GetCharPressed();
+
+        // Check if more characters have been pressed on the same frame
+        while (key > 0)
+        {
+            // NOTE: Only allow keys in range [32..125]
+            if ((key >= 32) && (key <= 125) && (letterCount < MAX_INPUT_CHARS))
+            {
+                serverIp[letterCount] = (char)key;
+                serverIp[letterCount + 1] = '\0'; // Add null terminator at the end of the string
+                letterCount++;
+            }
+
+            key = GetCharPressed();  // Check next character in the queue
+        }
+
+        if (IsKeyPressed(KEY_BACKSPACE))
+        {
+            letterCount--;
+            if (letterCount < 0) letterCount = 0;
+            serverIp[letterCount] = '\0';
+        }
+
+        framesCounter++;
+
+        BeginDrawing();
+
+        ClearBackground(RAYWHITE);
+
+        DrawRectangleRec(textBox, LIGHTGRAY);
+        DrawRectangleLines((int)textBox.x, (int)textBox.y, (int)textBox.width, (int)textBox.height, RED);
+
+        DrawText(serverIp, (int)textBox.x + 5, (int)textBox.y + 8, 40, MAROON);
+
+        DrawText(TextFormat("INPUT CHARS: %i/%i", letterCount, MAX_INPUT_CHARS), 315, 250, 20, DARKGRAY);
+
+        if (letterCount < MAX_INPUT_CHARS)
+        {
+            // Draw blinking underscore char
+            if (((framesCounter / 20) % 2) == 0) DrawText("_", (int)textBox.x + 8 + MeasureText(serverIp, 40), (int)textBox.y + 12, 40, MAROON);
+        }
+        else DrawText("Press BACKSPACE to delete chars...", 230, 300, 20, GRAY);
+
+        EndDrawing();
+    } break;
+    case GAMEPLAY: {
+        // Very basic fixed timestep implementation.
+        // Target FPS is 100 but the simulation runs at
+        // TICK_RATE ticks per second.
+        //
+        // We keep track of accumulated times and simulates as many tick as we can using that time
+
+        acc += GetFrameTime(); // Accumulates time
+
+        // Simulates as many ticks as we can
+        while (acc >= tick_dt)
+        {
+            int ev;
+
+            while ((ev = NBN_GameClient_Poll()) != NBN_NO_EVENT)
+            {
+                if (ev < 0)
+                {
+                    TraceLog(LOG_WARNING, "An occured while polling network events. Exit");
+
+                    break;
+                }
+
+                HandleGameClientEvent(ev);
+            }
+
+            if (connected && !disconnected)
+            {
+                if (Update() < 0)
+                    break;
+            }
+
+            if (!disconnected)
+            {
+                if (NBN_GameClient_SendPackets() < 0)
+                {
+                    TraceLog(LOG_ERROR, "An occured while flushing the send queue. Exit");
+
+                    break;
+                }
+            }
+
+            acc -= tick_dt; // Consumes time
+        }
+
+        Draw();
+    } break;
+    default: break;
+    }
+}
+
+int main(int argc, char* argv[])
+{
+    (void)argc;
+    (void)argv;
+
+    SetTraceLogLevel(LOG_DEBUG);
+    InitWindow(GAME_WIDTH, GAME_HEIGHT, "R-Type");
+    SetTargetFPS(TARGET_FPS);
 
     while (!WindowShouldClose())
     {

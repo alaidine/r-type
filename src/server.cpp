@@ -325,7 +325,7 @@ int main(int argc, char* argv[])
     NBN_UDP_Register(); // Register the UDP driver
 
     // Start the server with a protocol name and a port
-    if (NBN_GameServer_StartEx(RAYLIB_EXAMPLE_PROTOCOL_NAME, RAYLIB_EXAMPLE_PORT) < 0)
+    if (NBN_GameServer_StartEx(PROTOCOL_NAME, PORT) < 0)
     {
         TraceLog(LOG_ERROR, "Game server failed to start. Exit");
 
