@@ -58,7 +58,7 @@ typedef struct tagMSG* LPMSG;
 
 #endif // WINDOWS
 
-#define PROTOCOL_NAME "example"
+#define PROTOCOL_NAME "rt-protocol"
 #define PORT 42042
 
 // nbnet logging, use raylib logging
@@ -71,7 +71,6 @@ typedef struct tagMSG* LPMSG;
 #define NBN_LogTrace(...) TraceLog(LOG_TRACE, __VA_ARGS__)
 
 #include "nbnet.h"
-
 
 #include "udp.h"
 
@@ -152,12 +151,6 @@ typedef struct
     float jitter;
 } Options;
 
-
-typedef enum {
-    TITLE = 0,
-    IP_ADDRESS,
-    GAMEPLAY
-} GameScreen;
 
 ChangeColorMessage* ChangeColorMessage_Create(void);
 void ChangeColorMessage_Destroy(ChangeColorMessage*);

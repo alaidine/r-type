@@ -70,6 +70,9 @@ public:
 
 	bool running = true;
 
+	void Init(int argc, char **argv);
+	void Run(void);
+
 	void AcceptConnection(unsigned int x, unsigned int y, NBN_ConnectionHandle conn);
 	int HandleNewConnection(void);
 	Client* FindClientById(uint32_t client_id);
@@ -84,6 +87,8 @@ private:
 
 	unsigned int m_clientCount = 0;
 	std::array<Client*, MAX_CLIENTS> m_clients;
+
+	float tick_dt;
 
 	// Spawn positions
 	std::vector<Vector2> m_spawns;

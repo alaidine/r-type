@@ -1,15 +1,13 @@
+#include <memory>
+
 #include "server.h"
 
-// Add this at the top of the file, before Server constructor
+Server* g_serverInstance = nullptr;
+
 static void SigintHandler(int dummy)
 {
-    // Use a static/global pointer to the server instance
-    extern Server* g_serverInstance;
     g_serverInstance->running = false;
 }
-
-// Add this global pointer
-Server* g_serverInstance= nullptr;
 
 Server::Server()
 {
@@ -23,11 +21,14 @@ Server::Server()
         {50, GAME_HEIGHT - 100},
         {GAME_WIDTH - 100, GAME_HEIGHT - 100}
     };
+
+    float tick_dt = 1.f / TICK_RATE; // Tick delta time
 }
 
 Server::~Server()
 {
-
+    // Stop the server
+    NBN_GameServer_Stop();
 }
 
 void Server::AcceptConnection(unsigned int x, unsigned int y, NBN_ConnectionHandle conn)
@@ -259,58 +260,9 @@ int Server::BroadcastGameState(void)
     return 0;
 }
 
-
-int main(int argc, char* argv[])
+void Server::Run(void)
 {
-    Server server;
-
-    // Read command line arguments
-    if (ReadCommandLine(argc, argv))
-    {
-        printf("Usage: server [--packet_loss=<value>] [--packet_duplication=<value>] [--ping=<value>] \
-                [--jitter=<value>]\n");
-        return 1;
-    }
-
-    // Even though we do not display anything we still use raylib logging capacibilities
-    SetTraceLogLevel(LOG_DEBUG);
-
-    NBN_UDP_Register(); // Register the UDP driver
-
-    // Start the server with a protocol name and a port
-    if (NBN_GameServer_StartEx(PROTOCOL_NAME, PORT) < 0)
-    {
-        TraceLog(LOG_ERROR, "Game server failed to start. Exit");
-
-        return 1;
-    }
-
-    // Register messages, have to be done after NBN_GameServer_StartEx
-    NBN_GameServer_RegisterMessage(
-        CHANGE_COLOR_MESSAGE,
-        (NBN_MessageBuilder)ChangeColorMessage_Create,
-        (NBN_MessageDestructor)ChangeColorMessage_Destroy,
-        (NBN_MessageSerializer)ChangeColorMessage_Serialize);
-    NBN_GameServer_RegisterMessage(
-        UPDATE_STATE_MESSAGE,
-        (NBN_MessageBuilder)UpdateStateMessage_Create,
-        (NBN_MessageDestructor)UpdateStateMessage_Destroy,
-        (NBN_MessageSerializer)UpdateStateMessage_Serialize);
-    NBN_GameServer_RegisterMessage(
-        GAME_STATE_MESSAGE,
-        (NBN_MessageBuilder)GameStateMessage_Create,
-        (NBN_MessageDestructor)GameStateMessage_Destroy,
-        (NBN_MessageSerializer)GameStateMessage_Serialize);
-
-    // Network conditions simulated variables (read from the command line, default is always 0)
-    NBN_GameServer_SetPing(GetOptions().ping);
-    NBN_GameServer_SetJitter(GetOptions().jitter);
-    NBN_GameServer_SetPacketLoss(GetOptions().packet_loss);
-    NBN_GameServer_SetPacketDuplication(GetOptions().packet_duplication);
-
-    float tick_dt = 1.f / TICK_RATE; // Tick delta time
-
-    while (server.running)
+    while (running)
     {
         int ev;
 
@@ -324,12 +276,12 @@ int main(int argc, char* argv[])
                 break;
             }
 
-            if (server.HandleGameServerEvent(ev) < 0)
+            if (HandleGameServerEvent(ev) < 0)
                 break;
         }
 
         // Broadcast latest game state
-        if (server.BroadcastGameState() < 0)
+        if (BroadcastGameState() < 0)
         {
             TraceLog(LOG_ERROR, "An occured while broadcasting game states. Exit");
 
@@ -358,9 +310,62 @@ int main(int argc, char* argv[])
         nanosleep(&t, &t);
 #endif
     }
+}
 
-    // Stop the server
-    NBN_GameServer_Stop();
+void Server::Init(int argc, char **argv)
+{
+    // Read command line arguments
+    if (ReadCommandLine(argc, argv))
+    {
+        printf("Usage: server [--packet_loss=<value>] [--packet_duplication=<value>] [--ping=<value>] \
+                [--jitter=<value>]\n");
+        return;
+    }
 
+    // Even though we do not display anything we still use raylib logging capacibilities
+    SetTraceLogLevel(LOG_DEBUG);
+
+    NBN_UDP_Register(); // Register the UDP driver
+
+    // Start the server with a protocol name and a port
+    if (NBN_GameServer_StartEx(PROTOCOL_NAME, PORT) < 0)
+    {
+        TraceLog(LOG_ERROR, "Game server failed to start. Exit");
+
+        return;
+    }
+
+    // Register messages, have to be done after NBN_GameServer_StartEx
+    NBN_GameServer_RegisterMessage(
+        CHANGE_COLOR_MESSAGE,
+        (NBN_MessageBuilder)ChangeColorMessage_Create,
+        (NBN_MessageDestructor)ChangeColorMessage_Destroy,
+        (NBN_MessageSerializer)ChangeColorMessage_Serialize);
+    NBN_GameServer_RegisterMessage(
+        UPDATE_STATE_MESSAGE,
+        (NBN_MessageBuilder)UpdateStateMessage_Create,
+        (NBN_MessageDestructor)UpdateStateMessage_Destroy,
+        (NBN_MessageSerializer)UpdateStateMessage_Serialize);
+    NBN_GameServer_RegisterMessage(
+        GAME_STATE_MESSAGE,
+        (NBN_MessageBuilder)GameStateMessage_Create,
+        (NBN_MessageDestructor)GameStateMessage_Destroy,
+        (NBN_MessageSerializer)GameStateMessage_Serialize);
+
+    // Network conditions simulated variables (read from the command line, default is always 0)
+    NBN_GameServer_SetPing(GetOptions().ping);
+    NBN_GameServer_SetJitter(GetOptions().jitter);
+    NBN_GameServer_SetPacketLoss(GetOptions().packet_loss);
+    NBN_GameServer_SetPacketDuplication(GetOptions().packet_duplication);
+
+    tick_dt = 1.f / TICK_RATE; // Tick delta time
+}
+
+int main(int argc, char* argv[])
+{
+    std::unique_ptr<Server> server = std::make_unique<Server>();
+
+    server->Init(argc, argv);
+    server->Run();
     return 0;
 }

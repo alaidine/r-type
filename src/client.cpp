@@ -1,29 +1,6 @@
-#include <stdio.h>
+#include <memory>
 
-#include "shared.h"
-
-#define TARGET_FPS 60
-
-#define MAX_INPUT_CHARS 15
-
-static bool connected = false;         // Connected to the server
-static bool disconnected = false;      // Got disconnected from the server
-static bool spawned = false;           // Has spawned
-static int server_close_code;          // The server code used when closing the connection
-static ClientState local_client_state; // The state of the local client
-static GameScreen currentScreen = TITLE;
-
-// Array to hold other client states (`MAX_CLIENTS - 1` because we don't need to store the state of the local client)
-static ClientState* clients[MAX_CLIENTS - 1] = { NULL };
-
-/*
- * Array of client ids that were updated in the last received GameStateMessage.
- * This is used to detect and destroy disconnected remote clients.
- */
-static int updated_ids[MAX_CLIENTS];
-
-// Number of currently connected clients
-static unsigned int client_count = 0;
+#include "client.h"
 
 // Conversion table between client color values and raylib colors
 Color client_colors_to_raylib_colors[] = {
@@ -36,19 +13,51 @@ Color client_colors_to_raylib_colors[] = {
     PINK    // CLI_PINK
 };
 
-static void SpawnLocalClient(int x, int y, uint32_t client_id)
+Client::Client()
+{
+    m_connected = false;         // Connected to the server
+    m_disconnected = false;      // Got disconnected from the server
+    m_spawned = false;           // Has spawned
+    m_serverCloseCode = 0;       // The server code used when closing the connection
+    m_currentScreen = TITLE;
+    m_clients = {};
+    m_updatedIds = {};
+    m_clientCount = 0;
+    m_colorKeyPressed = false;
+
+    m_localClientState = { 0 };
+
+    m_tickDt = 1.0 / TICK_RATE; // Tick delta time (in seconds)
+    m_acc = 0;
+
+    memset(m_serverIp, 0, MAX_INPUT_CHARS + 1);
+    m_letterCount = 0;
+
+    m_textBox = { GAME_WIDTH / 2.0f - 100, 180, 225, 50 };
+
+    m_framesCounter = 0;
+}
+
+Client::~Client()
+{
+    // Stop the client
+    NBN_GameClient_Stop();
+    CloseWindow();
+}
+
+void Client::SpawnLocalClient(int x, int y, uint32_t client_id)
 {
     TraceLog(LOG_INFO, "Received spawn message, position: (%d, %d), client id: %d", x, y, client_id);
 
     // Update the local client state based on spawn info sent by the server
-    local_client_state.client_id = client_id;
-    local_client_state.x = x;
-    local_client_state.y = y;
+    m_localClientState.client_id = client_id;
+    m_localClientState.x = x;
+    m_localClientState.y = y;
 
-    spawned = true;
+    m_spawned = true;
 }
 
-static void HandleConnection(void)
+void Client::HandleConnection(void)
 {
     uint8_t data[32];
     unsigned int data_len = NBN_GameClient_ReadServerData(data);
@@ -66,44 +75,44 @@ static void HandleConnection(void)
 
     SpawnLocalClient(x, y, client_id);
 
-    connected = true;
+    m_connected = true;
 }
 
-static void HandleDisconnection(void)
+void Client::HandleDisconnection(void)
 {
     int code = NBN_GameClient_GetServerCloseCode(); // Get the server code used when closing the client connection
 
     TraceLog(LOG_INFO, "Disconnected from server (code: %d)", code);
 
-    disconnected = true;
-    server_close_code = code;
+    m_disconnected = true;
+    m_serverCloseCode = code;
 }
 
-static bool ClientExists(uint32_t client_id)
+bool Client::ClientExists(uint32_t client_id)
 {
     for (int i = 0; i < MAX_CLIENTS - 1; i++)
     {
-        if (clients[i] && clients[i]->client_id == client_id)
+        if (m_clients[i] && m_clients[i]->client_id == client_id)
             return true;
     }
 
     return false;
 }
 
-static void CreateClient(ClientState state)
+void Client::CreateClient(ClientState state)
 {
     TraceLog(LOG_DEBUG, "CreateClient %d", state.client_id);
-    assert(client_count < MAX_CLIENTS - 1);
+    assert(m_clientCount< MAX_CLIENTS - 1);
 
     ClientState* client = NULL;
 
     // Create a new remote client state and store it in the remote clients array at the first free slot found
     for (int i = 0; i < MAX_CLIENTS - 1; i++)
     {
-        if (clients[i] == NULL)
+        if (m_clients[i] == NULL)
         {
             client = (ClientState*)malloc(sizeof(ClientState));
-            clients[i] = client;
+            m_clients[i] = client;
 
             break;
         }
@@ -114,21 +123,21 @@ static void CreateClient(ClientState state)
     // Fill the newly created client state with client state info received from the server
     memcpy(client, &state, sizeof(ClientState));
 
-    client_count++;
+    m_clientCount++;
 
     TraceLog(LOG_INFO, "New remote client (ID: %d)", client->client_id);
 }
 
-static void UpdateClient(ClientState state)
+void Client::UpdateClient(ClientState state)
 {
     ClientState* client = NULL;
 
     // Find the client matching the client id of the received remote client state
     for (int i = 0; i < MAX_CLIENTS - 1; i++)
     {
-        if (clients[i] && clients[i]->client_id == state.client_id)
+        if (m_clients[i] && m_clients[i]->client_id == state.client_id)
         {
-            client = clients[i];
+            client = m_clients[i];
 
             break;
         }
@@ -140,27 +149,27 @@ static void UpdateClient(ClientState state)
     memcpy(client, &state, sizeof(ClientState));
 }
 
-static void DestroyClient(uint32_t client_id)
+void Client::DestroyClient(uint32_t client_id)
 {
     // Find the client matching the client id and destroy it
     for (int i = 0; i < MAX_CLIENTS - 1; i++)
     {
-        ClientState* client = clients[i];
+        ClientState* client = m_clients[i];
 
         if (client && client->client_id == client_id)
         {
             TraceLog(LOG_INFO, "Destroy disconnected client (ID: %d)", client->client_id);
 
             free(client);
-            clients[i] = NULL;
-            client_count--;
+            m_clients[i] = NULL;
+            m_clientCount--;
 
             return;
         }
     }
 }
 
-static void DestroyDisconnectedClients(void)
+void Client::DestroyDisconnectedClients(void)
 {
     /* Loop over all remote client states and remove the one that have not
      * been updated with the last received game state.
@@ -168,15 +177,15 @@ static void DestroyDisconnectedClients(void)
      */
     for (int i = 0; i < MAX_CLIENTS - 1; i++)
     {
-        if (clients[i] == NULL)
+        if (m_clients[i] == NULL)
             continue;
 
-        uint32_t client_id = clients[i]->client_id;
+        uint32_t client_id = m_clients[i]->client_id;
         bool disconnected = true;
 
         for (int j = 0; j < MAX_CLIENTS; j++)
         {
-            if ((int)client_id == updated_ids[j])
+            if ((int)client_id == m_updatedIds[j])
             {
                 disconnected = false;
 
@@ -189,14 +198,14 @@ static void DestroyDisconnectedClients(void)
     }
 }
 
-static void HandleGameStateMessage(GameStateMessage* msg)
+void Client::HandleGameStateMessage(GameStateMessage* msg)
 {
-    if (!spawned)
+    if (!m_spawned)
         return;
 
     // Start by resetting the updated client ids array
     for (int i = 0; i < MAX_CLIENTS; i++)
-        updated_ids[i] = -1;
+        m_updatedIds[i] = -1;
 
     // Loop over the received client states
     for (unsigned int i = 0; i < msg->client_count; i++)
@@ -204,7 +213,7 @@ static void HandleGameStateMessage(GameStateMessage* msg)
         ClientState state = msg->client_states[i];
 
         // Ignore the state of the local client
-        if (state.client_id != local_client_state.client_id)
+        if (state.client_id != m_localClientState.client_id)
         {
             // If the client already exists we update it with the latest received state
             if (ClientExists(state.client_id))
@@ -212,7 +221,7 @@ static void HandleGameStateMessage(GameStateMessage* msg)
             else // If the client does not exist, we create it
                 CreateClient(state);
 
-            updated_ids[i] = state.client_id;
+            m_updatedIds[i] = state.client_id;
         }
     }
 
@@ -222,7 +231,7 @@ static void HandleGameStateMessage(GameStateMessage* msg)
     GameStateMessage_Destroy(msg);
 }
 
-static void HandleReceivedMessage(void)
+void Client::HandleReceivedMessage(void)
 {
     // Fetch info about the last received message
     NBN_MessageInfo msg_info = NBN_GameClient_GetMessageInfo();
@@ -236,7 +245,7 @@ static void HandleReceivedMessage(void)
     }
 }
 
-static void HandleGameClientEvent(int ev)
+void Client::HandleGameClientEvent(int ev)
 {
     switch (ev)
     {
@@ -257,14 +266,14 @@ static void HandleGameClientEvent(int ev)
     }
 }
 
-static int SendPositionUpdate(void)
+int Client::SendPositionUpdate(void)
 {
     UpdateStateMessage* msg = UpdateStateMessage_Create();
 
     // Fill message data
-    msg->x = local_client_state.x;
-    msg->y = local_client_state.y;
-    msg->val = local_client_state.val;
+    msg->x = m_localClientState.x;
+    msg->y = m_localClientState.y;
+    msg->val = m_localClientState.val;
 
     // Unreliably send it to the server
     if (NBN_GameClient_SendUnreliableMessage(UPDATE_STATE_MESSAGE, msg) < 0)
@@ -273,12 +282,12 @@ static int SendPositionUpdate(void)
     return 0;
 }
 
-static int SendColorUpdate(void)
+int Client::SendColorUpdate(void)
 {
     ChangeColorMessage* msg = ChangeColorMessage_Create();
 
     // Fill message data
-    msg->color = local_client_state.color;
+    msg->color = m_localClientState.color;
 
     // Reliably send it to the server
     if (NBN_GameClient_SendReliableMessage(CHANGE_COLOR_MESSAGE, msg) < 0)
@@ -287,31 +296,29 @@ static int SendColorUpdate(void)
     return 0;
 }
 
-bool color_key_pressed = false;
-
-static int Update(void)
+int Client::Update(void)
 {
-    if (!spawned)
+    if (!m_spawned)
         return 0;
 
     // Movement code
     if (IsKeyDown(KEY_UP))
-        local_client_state.y = MAX(0, local_client_state.y - 5);
+        m_localClientState.y = MAX(0, m_localClientState.y - 5);
     else if (IsKeyDown(KEY_DOWN))
-        local_client_state.y = MIN(GAME_HEIGHT - 50, local_client_state.y + 5);
+        m_localClientState.y = MIN(GAME_HEIGHT - 50, m_localClientState.y + 5);
 
     if (IsKeyDown(KEY_LEFT))
-        local_client_state.x = MAX(0, local_client_state.x - 5);
+        m_localClientState.x = MAX(0, m_localClientState.x - 5);
     else if (IsKeyDown(KEY_RIGHT))
-        local_client_state.x = MIN(GAME_WIDTH - 50, local_client_state.x + 5);
+        m_localClientState.x = MIN(GAME_WIDTH - 50, m_localClientState.x + 5);
 
     // Color switching
-    if (IsKeyDown(KEY_SPACE) && !color_key_pressed)
+    if (IsKeyDown(KEY_SPACE) && !m_colorKeyPressed)
     {
-        color_key_pressed = true;
-        local_client_state.color = (ClientColor)((local_client_state.color + 1) % MAX_COLORS);
+        m_colorKeyPressed = true;
+        m_localClientState.color = (ClientColor)((m_localClientState.color + 1) % MAX_COLORS);
 
-        TraceLog(LOG_INFO, "Switched color, new color: %d", local_client_state.color);
+        TraceLog(LOG_INFO, "Switched color, new color: %d", m_localClientState.color);
 
         if (SendColorUpdate() < 0)
         {
@@ -322,14 +329,14 @@ static int Update(void)
     }
 
     if (IsKeyUp(KEY_SPACE))
-        color_key_pressed = false;
+        m_colorKeyPressed = false;
 
     // Increasing/Decreasing floating point value
     if (IsKeyDown(KEY_K))
-        local_client_state.val = MIN(MAX_FLOAT_VAL, local_client_state.val + 0.005);
+        m_localClientState.val = MIN(MAX_FLOAT_VAL, m_localClientState.val + 0.005);
 
     if (IsKeyDown(KEY_J))
-        local_client_state.val = MAX(MIN_FLOAT_VAL, local_client_state.val - 0.005);
+        m_localClientState.val = MAX(MIN_FLOAT_VAL, m_localClientState.val - 0.005);
 
     // Send the latest local client state to the server
     if (SendPositionUpdate() < 0)
@@ -342,7 +349,7 @@ static int Update(void)
     return 0;
 }
 
-void DrawClient(ClientState* state, bool is_local)
+void Client::DrawClient(ClientState* state, bool is_local)
 {
     Color color = client_colors_to_raylib_colors[state->color];
     const char* text = TextFormat("%.3f", state->val);
@@ -357,7 +364,7 @@ void DrawClient(ClientState* state, bool is_local)
         DrawRectangleLinesEx(rect, 3, DARKBROWN);
 }
 
-void DrawHUD(void)
+void Client::DrawHUD(void)
 {
     NBN_ConnectionStats stats = NBN_GameClient_GetStats();
     unsigned int ping = stats.ping * 1000;
@@ -370,36 +377,36 @@ void DrawHUD(void)
     DrawText(TextFormat("Download: %.1f Bps", stats.download_bandwidth), 450, 550, 32, MAROON);
 }
 
-void Draw(void)
+void Client::Draw(void)
 {
     BeginDrawing();
     ClearBackground(LIGHTGRAY);
 
-    if (disconnected)
+    if (m_disconnected)
     {
-        if (server_close_code == -1)
+        if (m_serverCloseCode == -1)
         {
-            if (connected)
+            if (m_connected)
                 DrawText("Connection to the server was lost", 265, 280, 20, RED);
             else
                 DrawText("Server cannot be reached", 265, 280, 20, RED);
         }
-        else if (server_close_code == SERVER_FULL_CODE)
+        else if (m_serverCloseCode == SERVER_FULL_CODE)
         {
             DrawText("Cannot connect, server is full", 265, 280, 20, RED);
         }
     }
-    else if (connected && spawned)
+    else if (m_connected && m_spawned)
     {
         // Start by drawing the remote clients
         for (int i = 0; i < MAX_CLIENTS - 1; i++)
         {
-            if (clients[i])
-                DrawClient(clients[i], false);
+            if (m_clients[i])
+                DrawClient(m_clients[i], false);
         }
 
         // Then draw the local client
-        DrawClient(&local_client_state, true);
+        DrawClient(&m_localClientState, true);
     }
     else
     {
@@ -409,7 +416,7 @@ void Draw(void)
     EndDrawing();
 }
 
-void InitClient(char *serverIp)
+void Client::InitClient(char *serverIp)
 {
     NBN_UDP_Register();
 
@@ -449,24 +456,15 @@ void InitClient(char *serverIp)
     NBN_GameClient_SetPacketDuplication(GetOptions().packet_duplication);
 }
 
-static double tick_dt = 1.0 / TICK_RATE; // Tick delta time (in seconds)
-static double acc = 0;
 
-char serverIp[MAX_INPUT_CHARS + 1] = "\0";      // NOTE: One extra space required for null terminator char '\0'
-int letterCount = 0;
-
-Rectangle textBox = { GAME_WIDTH / 2.0f - 100, 180, 225, 50 };
-
-int framesCounter = 0;
-
-void UpdateAndDraw()
+void Client::UpdateAndDraw(void)
 {
-    switch (currentScreen)
+    switch (m_currentScreen)
     {
     case TITLE: {
         if (IsKeyPressed(KEY_ENTER) || IsGestureDetected(GESTURE_TAP))
         {
-            currentScreen = IP_ADDRESS;
+            m_currentScreen = IP_ADDRESS;
         }
 
         BeginDrawing();
@@ -479,8 +477,8 @@ void UpdateAndDraw()
     case IP_ADDRESS: {
         if (IsKeyPressed(KEY_ENTER))
         {
-            InitClient(serverIp);
-            currentScreen = GAMEPLAY;
+            InitClient(m_serverIp);
+            m_currentScreen = GAMEPLAY;
         }
 
         // Set the window's cursor to the I-Beam
@@ -493,11 +491,11 @@ void UpdateAndDraw()
         while (key > 0)
         {
             // NOTE: Only allow keys in range [32..125]
-            if ((key >= 32) && (key <= 125) && (letterCount < MAX_INPUT_CHARS))
+            if ((key >= 32) && (key <= 125) && (m_letterCount < MAX_INPUT_CHARS))
             {
-                serverIp[letterCount] = (char)key;
-                serverIp[letterCount + 1] = '\0'; // Add null terminator at the end of the string
-                letterCount++;
+                m_serverIp[m_letterCount] = (char)key;
+                m_serverIp[m_letterCount + 1] = '\0'; // Add null terminator at the end of the string
+                m_letterCount++;
             }
 
             key = GetCharPressed();  // Check next character in the queue
@@ -505,28 +503,28 @@ void UpdateAndDraw()
 
         if (IsKeyPressed(KEY_BACKSPACE))
         {
-            letterCount--;
-            if (letterCount < 0) letterCount = 0;
-            serverIp[letterCount] = '\0';
+            m_letterCount--;
+            if (m_letterCount < 0) m_letterCount = 0;
+            m_serverIp[m_letterCount] = '\0';
         }
 
-        framesCounter++;
+        m_framesCounter++;
 
         BeginDrawing();
 
         ClearBackground(RAYWHITE);
 
-        DrawRectangleRec(textBox, LIGHTGRAY);
-        DrawRectangleLines((int)textBox.x, (int)textBox.y, (int)textBox.width, (int)textBox.height, RED);
+        DrawRectangleRec(m_textBox, LIGHTGRAY);
+        DrawRectangleLines((int)m_textBox.x, (int)m_textBox.y, (int)m_textBox.width, (int)m_textBox.height, RED);
 
-        DrawText(serverIp, (int)textBox.x + 5, (int)textBox.y + 8, 40, MAROON);
+        DrawText(m_serverIp, (int)m_textBox.x + 5, (int)m_textBox.y + 8, 40, MAROON);
 
-        DrawText(TextFormat("INPUT CHARS: %i/%i", letterCount, MAX_INPUT_CHARS), 315, 250, 20, DARKGRAY);
+        DrawText(TextFormat("INPUT CHARS: %i/%i", m_letterCount, MAX_INPUT_CHARS), 315, 250, 20, DARKGRAY);
 
-        if (letterCount < MAX_INPUT_CHARS)
+        if (m_letterCount < MAX_INPUT_CHARS)
         {
             // Draw blinking underscore char
-            if (((framesCounter / 20) % 2) == 0) DrawText("_", (int)textBox.x + 8 + MeasureText(serverIp, 40), (int)textBox.y + 12, 40, MAROON);
+            if (((m_framesCounter / 20) % 2) == 0) DrawText("_", (int)m_textBox.x + 8 + MeasureText(m_serverIp, 40), (int)m_textBox.y + 12, 40, MAROON);
         }
         else DrawText("Press BACKSPACE to delete chars...", 230, 300, 20, GRAY);
 
@@ -539,10 +537,10 @@ void UpdateAndDraw()
         //
         // We keep track of accumulated times and simulates as many tick as we can using that time
 
-        acc += GetFrameTime(); // Accumulates time
+        m_acc += GetFrameTime(); // Accumulates time
 
         // Simulates as many ticks as we can
-        while (acc >= tick_dt)
+        while (m_acc >= m_tickDt)
         {
             int ev;
 
@@ -558,13 +556,13 @@ void UpdateAndDraw()
                 HandleGameClientEvent(ev);
             }
 
-            if (connected && !disconnected)
+            if (m_connected && !m_disconnected)
             {
                 if (Update() < 0)
                     break;
             }
 
-            if (!disconnected)
+            if (!m_disconnected)
             {
                 if (NBN_GameClient_SendPackets() < 0)
                 {
@@ -574,7 +572,7 @@ void UpdateAndDraw()
                 }
             }
 
-            acc -= tick_dt; // Consumes time
+            m_acc -= m_tickDt; // Consumes time
         }
 
         Draw();
@@ -583,23 +581,29 @@ void UpdateAndDraw()
     }
 }
 
+void Client::Init(void)
+{
+    SetTraceLogLevel(LOG_DEBUG);
+    InitWindow(GAME_WIDTH, GAME_HEIGHT, "R-Type");
+    SetTargetFPS(TARGET_FPS);
+}
+
+void Client::Run(void)
+{
+    while (!WindowShouldClose())
+    {
+        UpdateAndDraw();
+    }
+}
+
 int main(int argc, char* argv[])
 {
     (void)argc;
     (void)argv;
 
-    SetTraceLogLevel(LOG_DEBUG);
-    InitWindow(GAME_WIDTH, GAME_HEIGHT, "R-Type");
-    SetTargetFPS(TARGET_FPS);
+    std::unique_ptr<Client> client = std::make_unique<Client>();
 
-    while (!WindowShouldClose())
-    {
-        UpdateAndDraw();
-    }
-
-    // Stop the client
-    NBN_GameClient_Stop();
-    CloseWindow();
-
+    client->Init();
+    client->Run();
     return 0;
 }
