@@ -22,6 +22,10 @@
 *.la
 *.lo
 
+# Exception: Include Lua libraries
+!lua/liblua54.a
+!lua/lua54.lib
+
 # Shared objects (inc. Windows DLLs)
 *.dll
 *.so
