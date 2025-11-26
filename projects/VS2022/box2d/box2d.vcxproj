@@ -41,7 +41,6 @@
     <ClCompile Include="..\..\..\..\box2d\src\math_functions.c" />
     <ClCompile Include="..\..\..\..\box2d\src\motor_joint.c" />
     <ClCompile Include="..\..\..\..\box2d\src\mover.c" />
-    <ClCompile Include="..\..\..\..\box2d\src\physics_world.c" />
     <ClCompile Include="..\..\..\..\box2d\src\prismatic_joint.c" />
     <ClCompile Include="..\..\..\..\box2d\src\revolute_joint.c" />
     <ClCompile Include="..\..\..\..\box2d\src\sensor.c" />
@@ -53,6 +52,7 @@
     <ClCompile Include="..\..\..\..\box2d\src\types.c" />
     <ClCompile Include="..\..\..\..\box2d\src\weld_joint.c" />
     <ClCompile Include="..\..\..\..\box2d\src\wheel_joint.c" />
+    <ClCompile Include="..\..\..\..\box2d\src\world.c" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\..\..\..\box2d\src\aabb.h" />
@@ -71,12 +71,12 @@
     <ClInclude Include="..\..\..\..\box2d\src\id_pool.h" />
     <ClInclude Include="..\..\..\..\box2d\src\island.h" />
     <ClInclude Include="..\..\..\..\box2d\src\joint.h" />
-    <ClInclude Include="..\..\..\..\box2d\src\physics_world.h" />
     <ClInclude Include="..\..\..\..\box2d\src\sensor.h" />
     <ClInclude Include="..\..\..\..\box2d\src\shape.h" />
     <ClInclude Include="..\..\..\..\box2d\src\solver.h" />
     <ClInclude Include="..\..\..\..\box2d\src\solver_set.h" />
     <ClInclude Include="..\..\..\..\box2d\src\table.h" />
+    <ClCompile Include="..\..\..\..\box2d\src\world.h" />
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <VCProjectVersion>17.0</VCProjectVersion>
