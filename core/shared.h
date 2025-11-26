@@ -9,12 +9,8 @@
 #define NBN_LogDebug(...) TraceLog(LOG_DEBUG, __VA_ARGS__)
 #define NBN_LogTrace(...) TraceLog(LOG_TRACE, __VA_ARGS__)
 
-extern "C" {
-#ifndef NBNET_IMPL
 #include "nbnet.h"
 #include "udp.h"
-#endif
-}
 
 #define PROTOCOL_NAME "rt-protocol"
 #define PORT 42042

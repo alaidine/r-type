@@ -1,6 +1,9 @@
 #pragma once
 
-#include "pch.h"
+#include <vector>
+#include <array>
+#include <memory>
+#include <sol/sol.hpp>
 
 #define TARGET_FPS 60
 #define MAX_INPUT_CHARS 15

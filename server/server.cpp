@@ -1,3 +1,4 @@
+#include "pch.h"
 #include "server.h"
 
 Server* g_serverInstance = nullptr;

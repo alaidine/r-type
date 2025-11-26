@@ -1,3 +1,4 @@
+#include "pch.h"
 #include "client.h"
 
 // Conversion table between client color values and raylib colors

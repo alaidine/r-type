@@ -1,6 +1,9 @@
 #pragma once
 
-#include "pch.h"
+#include <vector>
+#include <array>
+#include <memory>
+#include <sol/sol.hpp>
 
 // A simple structure to represent connected clients
 typedef struct
