@@ -5,6 +5,8 @@
 #include <memory>
 #include <sol/sol.hpp>
 
+#include "shared.h"
+
 // A simple structure to represent connected clients
 typedef struct
 {
@@ -17,6 +19,14 @@ typedef struct
 
 class Server
 {
+private:
+	unsigned int m_clientCount = 0;
+	std::array<Client*, MAX_CLIENTS> m_clients;
+
+	float tick_dt;
+
+	// Spawn positions
+	std::vector<Vector2> m_spawns;
 public:
 	Server();
 	~Server();
@@ -36,13 +46,4 @@ public:
 	void HandleReceivedMessage(void);
 	int HandleGameServerEvent(int ev);
 	int BroadcastGameState(void);
-private:
-
-	unsigned int m_clientCount = 0;
-	std::array<Client*, MAX_CLIENTS> m_clients;
-
-	float tick_dt;
-
-	// Spawn positions
-	std::vector<Vector2> m_spawns;
 };

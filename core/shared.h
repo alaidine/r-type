@@ -67,6 +67,15 @@ typedef struct
     ClientColor color;
 } ChangeColorMessage;
 
+typedef struct
+{
+    Vector2 pos;
+    Rectangle rect;
+    int currentFrame;
+    int framesSpeed;
+    int framesCounter;
+} Missile;
+
 // Client state, represents a client over the network
 typedef struct
 {
@@ -91,7 +100,6 @@ typedef struct
     float ping;
     float jitter;
 } Options;
-
 
 ChangeColorMessage* ChangeColorMessage_Create(void);
 void ChangeColorMessage_Destroy(ChangeColorMessage*);

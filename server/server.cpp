@@ -1,4 +1,3 @@
-#include "pch.h"
 #include "server.h"
 
 Server* g_serverInstance = nullptr;
@@ -21,7 +20,7 @@ Server::Server()
         {GAME_WIDTH - 100, GAME_HEIGHT - 100}
     };
 
-    float tick_dt = 1.f / TICK_RATE; // Tick delta time
+    tick_dt = 1.0f / TICK_RATE; // Tick delta time
 }
 
 Server::~Server()
@@ -356,8 +355,6 @@ void Server::Init(int argc, char **argv)
     NBN_GameServer_SetJitter(GetOptions().jitter);
     NBN_GameServer_SetPacketLoss(GetOptions().packet_loss);
     NBN_GameServer_SetPacketDuplication(GetOptions().packet_duplication);
-
-    tick_dt = 1.f / TICK_RATE; // Tick delta time
 }
 
 int main(int argc, char* argv[])

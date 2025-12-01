@@ -1,4 +1,3 @@
-#include "pch.h"
 #include "client.h"
 
 // Conversion table between client color values and raylib colors
@@ -20,12 +19,13 @@ Client::Client()
     m_spawned = false;           // Has spawned
     m_serverCloseCode = 0;       // The server code used when closing the connection
     m_currentScreen = TITLE;
-    m_clients = {};
-    m_updatedIds = {};
+    m_clients = { 0 };
+    m_updatedIds = { 0 };
     m_clientCount = 0;
     m_colorKeyPressed = false;
+    m_fireMissileKeyPressed = false;
     m_localClientState = { 0 };
-    m_tickDt = 1.0 / TICK_RATE; // Tick delta time (in seconds)
+    m_tickDt = 1.0f / TICK_RATE; // Tick delta time (in seconds)
     m_acc = 0;
     m_letterCount = 0;
     m_textBox = { GAME_WIDTH / 2.0f - 170, 180, 365, 50 };
@@ -33,6 +33,12 @@ Client::Client()
     m_displayHUD = false;
     m_player = { 0 };
     m_background = { 0 };
+
+    m_missileAnimationRectangles[0] = { 0, 128, 25, 22 };
+    m_missileAnimationRectangles[1] = { 25, 128, 31, 22 };
+    m_missileAnimationRectangles[2] = { 56, 128, 40, 22 };
+    m_missileAnimationRectangles[3] = { 96, 128, 55, 22 };
+    m_missileAnimationRectangles[4] = { 151, 128, 72, 22 };
 
     memset(m_serverIp, 0, MAX_INPUT_CHARS + 1);
 }
@@ -107,7 +113,7 @@ bool Client::ClientExists(uint32_t client_id)
 void Client::CreateClient(ClientState state)
 {
     TraceLog(LOG_DEBUG, "CreateClient %d", state.client_id);
-    assert(m_clientCount< MAX_CLIENTS - 1);
+    assert(m_clientCount < MAX_CLIENTS - 1);
 
     ClientState* client = NULL;
 
@@ -176,7 +182,8 @@ void Client::DestroyClient(uint32_t client_id)
 
 void Client::DestroyDisconnectedClients(void)
 {
-    /* Loop over all remote client states and remove the one that have not
+    /* 
+     * Loop over all remote client states and remove the one that have not
      * been updated with the last received game state.
      * This is how we detect disconnected clients.
      */
@@ -300,10 +307,21 @@ int Client::SendColorUpdate(void)
     return 0;
 }
 
-int Client::Update(void)
+int Client::UpdateGameplay(void)
 {
     if (!m_spawned)
         return 0;
+
+    // Firing missile
+    if (IsKeyDown(KEY_SPACE) && !m_fireMissileKeyPressed)
+    {
+        m_fireMissileKeyPressed = true;
+        TraceLog(LOG_INFO, "Firing missile");
+        Fire();
+    }
+
+    if (IsKeyUp(KEY_SPACE))
+        m_fireMissileKeyPressed = false;
 
     // Movement code
     if (IsKeyDown(KEY_UP) || IsKeyDown(KEY_W))
@@ -396,7 +414,7 @@ void Client::DrawBackground(void)
     DrawTexturePro(m_background, source_rect, dest_rect, origin, 0.0f, WHITE);
 }
 
-void Client::Draw(void)
+void Client::DrawGameplay(void)
 {
     BeginDrawing();
     ClearBackground(LIGHTGRAY);
@@ -429,6 +447,9 @@ void Client::Draw(void)
 
         // Then draw the local client
         DrawClient(&m_localClientState, true);
+
+        // Draw the missiles
+        DrawMissiles();
 
         // Draw hud if m_hudDisplay variable is true
         if (m_displayHUD)
@@ -548,7 +569,7 @@ void Client::UpdateAndDraw(void)
 
             if (m_connected && !m_disconnected)
             {
-                if (Update() < 0)
+                if (UpdateGameplay() < 0)
                     break;
             }
 
@@ -565,7 +586,7 @@ void Client::UpdateAndDraw(void)
             m_acc -= m_tickDt; // Consumes time
         }
 
-        Draw();
+        DrawGameplay();
     } break;
     default: break;
     }
@@ -629,6 +650,62 @@ void Client::Run(void)
     while (!WindowShouldClose())
     {
         UpdateAndDraw();
+    }
+}
+
+void Client::Fire(void)
+{
+    Missile missile = {
+        .pos = { 0 },
+        .rect = { 0 },
+        .currentFrame = 0,
+        .framesSpeed = 8,
+        .framesCounter = 0
+    };
+
+    missile.pos.x = m_localClientState.x;
+    missile.pos.y = m_localClientState.y;
+    missile.rect.x= m_missileAnimationRectangles[missile.currentFrame].x;
+    missile.rect.y= m_missileAnimationRectangles[missile.currentFrame].y;
+    missile.rect.height = m_missileAnimationRectangles[missile.currentFrame].height;
+    missile.rect.width = m_missileAnimationRectangles[missile.currentFrame].width;
+    m_missiles.push_back(missile);
+}
+
+void Client::DrawMissiles(void)
+{
+    m_missiles.erase(std::remove_if(m_missiles.begin(), m_missiles.end(),
+        [](Missile missile) {
+            if (missile.pos.x > GAME_WIDTH)
+                TraceLog(LOG_INFO, "Missile out of map... Deleting missile...");
+            return missile.pos.x > GAME_WIDTH;
+        }), m_missiles.end());
+
+    for (Missile& missile : m_missiles)
+    {
+        missile.framesCounter++;
+
+        if (missile.framesCounter >= (TARGET_FPS / missile.framesSpeed))
+        {
+            missile.framesCounter = 0;
+            missile.currentFrame++;
+            if (missile.currentFrame > 4) missile.currentFrame = 0;
+            missile.rect.x = m_missileAnimationRectangles[missile.currentFrame].x;
+            missile.rect.y = m_missileAnimationRectangles[missile.currentFrame].y;
+            missile.rect.height = m_missileAnimationRectangles[missile.currentFrame].height;
+            missile.rect.width = m_missileAnimationRectangles[missile.currentFrame].width;
+        }
+
+        missile.pos.x += 5;
+
+        float frameWidth = missile.rect.width;
+        float frameHeight = missile.rect.height;
+        Rectangle sourceRec = { missile.rect.x, missile.rect.y, frameWidth, frameHeight };
+        Rectangle rec = { (float)missile.pos.x, (float)missile.pos.y, frameWidth * 2.0f, frameHeight * 2.0f };
+        Rectangle destRec = { (float)missile.pos.x, (float)missile.pos.y, frameWidth * 2.0f, frameHeight * 2.0f };
+        Vector2 origin = { 0.0f, 0.0f };
+
+        DrawTexturePro(m_player, sourceRec, destRec, origin, 0.0f, WHITE);
     }
 }
 

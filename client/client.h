@@ -5,7 +5,9 @@
 #include <memory>
 #include <sol/sol.hpp>
 
-#define TARGET_FPS 60
+#include "shared.h"
+
+#define TARGET_FPS 100
 #define MAX_INPUT_CHARS 15
 
 class Client
@@ -27,8 +29,11 @@ private:
 	GameScreen m_currentScreen;
 	std::array<ClientState*, MAX_CLIENTS - 1> m_clients;
 	std::array<int, MAX_CLIENTS> m_updatedIds;
+	std::array<Rectangle, 5> m_missileAnimationRectangles;
+	std::vector<Missile> m_missiles;
 	unsigned int m_clientCount;
 	bool m_colorKeyPressed;
+	bool m_fireMissileKeyPressed;
 	double m_tickDt; // Tick delta time (in seconds)
 	double m_acc;
 	char m_serverIp[MAX_INPUT_CHARS + 1]; // NOTE: One extra space required for null terminator char '\0'
@@ -38,13 +43,15 @@ private:
 	bool m_displayHUD;
 	Texture2D m_player;
 	Texture2D m_background;
-
 public:
 	Client();
 	~Client();
 
 	void Init(void);
 	void Run(void);
+
+	void Fire(void);
+	void DrawMissiles(void);
 
 	void SpawnLocalClient(int x, int y, uint32_t client_id);
 	bool ClientExists(uint32_t client_id);
@@ -62,13 +69,13 @@ public:
 	int SendPositionUpdate(void);
 	int SendColorUpdate(void);
 
-	int Update(void);
+	int UpdateGameplay(void);
 	void UpdateClient(ClientState state);
 	
 	void UpdateAndDraw(void);
 	void DrawClient(ClientState* state, bool is_local);
 	void DrawHUD(void);
-	void Draw(void);
+	void DrawGameplay(void);
 	void DrawBackground(void);
 
 	void InitClient(char* serverIp);

@@ -20,11 +20,14 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\..\..\core\framework.h" />
+    <ClInclude Include="..\..\..\core\message.h" />
     <ClInclude Include="..\..\..\core\nbnet.h" />
+    <ClInclude Include="..\..\..\core\network.h" />
     <ClInclude Include="..\..\..\core\shared.h" />
     <ClInclude Include="..\..\..\core\udp.h" />
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="..\..\..\core\network.cpp" />
     <ClCompile Include="..\..\..\core\shared.cpp">
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">NotUsing</PrecompiledHeader>
     </ClCompile>
@@ -137,7 +140,7 @@
       <ConformanceMode>true</ConformanceMode>
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
       <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
-      <AdditionalIncludeDirectories>$(SolutionDir)..\..\core;$(SolutionDir)..\..\..\raylib\src;$(SolutionDir)..\..\..\sol2\include;$(SolutionDir)..\..\lua\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(SolutionDir)..\..\core;$(SolutionDir)..\..\..\raylib\src;$(SolutionDir)..\..\..\sol2\include;$(SolutionDir)..\..\lua\include;$(SolutionDir)..\..\..\spdlog\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <LanguageStandard>stdcpp20</LanguageStandard>
       <RuntimeLibrary>MultiThreadedDebugDLL</RuntimeLibrary>
       <LanguageStandard_C>Default</LanguageStandard_C>
@@ -162,7 +165,7 @@
       <ConformanceMode>true</ConformanceMode>
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
       <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
-      <AdditionalIncludeDirectories>$(SolutionDir)..\..\core;$(SolutionDir)..\..\..\raylib\src;$(SolutionDir)..\..\..\sol2\include;$(SolutionDir)..\..\lua\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(SolutionDir)..\..\core;$(SolutionDir)..\..\..\raylib\src;$(SolutionDir)..\..\..\sol2\include;$(SolutionDir)..\..\lua\include;$(SolutionDir)..\..\..\spdlog\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <LanguageStandard>stdcpp20</LanguageStandard>
       <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
       <LanguageStandard_C>Default</LanguageStandard_C>

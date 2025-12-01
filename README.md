@@ -1,15 +1,12 @@
-
 ## Getting Started
 
 #### Linux
-When setting up this template on linux for the first time, install the dependencies from this page:
+Install the dependencies from this page:
 ([Working on GNU Linux](https://github.com/raysan5/raylib/wiki/Working-on-GNU-Linux))
-
-You can use this templates in a few ways: using Visual Studio, using CMake, or make your own build setup. This repository comes with Visual Studio and CMake already set up.
 
 ### Project Structure
 
-The project is now organized into separate modules:
+The project is organized into separate modules:
 - **core/**: Static library containing shared functionality (networking, physics, scripting)
 - **client/**: Client executable with graphics and input handling  
 - **server/**: Server executable with game logic and networking
@@ -59,9 +56,9 @@ Then open `projects/VS2022/r-type.sln`
 
 This project uses:
 - **Raylib 5.0**: Graphics and game framework
-- **Sol2**: Modern C++ Lua binding library  
-- **Lua 5.4**: Embedded scripting language (precompiled libraries in `lua/`)
-- **Box2D 2.4.1**: 2D physics engine
+- **Sol2 3.3.0**: Modern C++ Lua binding library  
+- **Lua 5.4.7**: Embedded scripting language (precompiled libraries in `lua/`)
+- **Box2D 3.1.1**: 2D physics engine
 
 **Core Library**: All shared dependencies are linked into `r-type_core` static library, which is then used by both client and server executables.
 
