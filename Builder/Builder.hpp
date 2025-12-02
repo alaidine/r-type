@@ -2,18 +2,15 @@
     #include <iostream>
     #include "../Core.hpp"
 
-extern Core _core;
-//Product class
+
 namespace MiniBuilder {
     class EntityBuilder {
         private:
             Entity _entity;
         public:
-            EntityBuilder(Entity entity) {
-                this->_entity = entity;
-            }
+            EntityBuilder(Entity entity): _entity(entity){};
             template<typename...args>
-            void BuildEntity(args&&... comps) {
+            void BuildEntity(Core& _core, args&&... comps) {
                 (_core.AddComponent(_entity, std::forward<args>(comps)), ...);
             };
     };
@@ -21,7 +18,7 @@ namespace MiniBuilder {
     class RegisterComponentBuilder {
         public:
             template<typename... TComponents>
-            void RegisterComponents() {
+            void RegisterComponents(Core& _core) {
                 (_core.RegisterComponent<TComponents>(), ...);
             }
     };
@@ -33,7 +30,7 @@ namespace MiniBuilder {
             SystemBuilder(Signature signature): _signature(signature){}
 
             template<typename Sys, typename...TComponents>
-            void BuildSignature() {
+            void BuildSignature(Core& _core) {
                 (_signature.set(_core.GetComponentType<TComponents>(), true), ...);
 
                 _core.SetSystemSignature<Sys>(_signature);

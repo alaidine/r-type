@@ -7,12 +7,14 @@ extern Core _core;
 
 class GravitySystem : public System {
     public:
-        void Update() {
+        void Update() override {
             for (auto const& entity: _entities) {
                 auto& pos = _core.GetComponent<Position>(entity);
                 auto& gravity = _core.GetComponent<Gravity>(entity);
-                pos.y += gravity.force;
-                std::cout << "pos y = " << pos.y << std::endl; 
+                pos.position.y += gravity.force;
+                if (pos.position.y >= 400)
+                    pos.position.y = 400;
+                std::cout << "Gravity system" << std::endl;
             }
         }
 };

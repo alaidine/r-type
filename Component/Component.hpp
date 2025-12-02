@@ -1,5 +1,6 @@
 #pragma once
     #include <cstdint>
+    #include <raylib.h>
 
 using ComponentType = std::uint8_t;
 
@@ -10,10 +11,15 @@ struct Gravity {
 };
 
 struct Position {
-    float x;
-    float y;
+    Vector2 position;
 };
 
 struct Velocity {
     float speed;
 };
+
+struct Sprite {
+    Color color;
+};
+
+struct InputController{};

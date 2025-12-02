@@ -3,6 +3,7 @@
     #include "../Signature.hpp"
     #include <memory>
     #include <unordered_map>
+    #include <algorithm>
 
 class SystemManager {
     private:
@@ -47,5 +48,20 @@ class SystemManager {
                 else
                     system->_entities.erase(entity);
             }
+        }
+    
+        void SystemUpdateOrder() {
+            std::vector<std::shared_ptr<System>> tmp{};
+
+            for (auto i = _systems.begin(); i != _systems.end(); i++) {
+                tmp.push_back(i->second);
+            }
+            std::sort(tmp.begin(), tmp.end(),
+                [](auto& a, auto& b) {
+                    return a->order < b->order;
+                }
+            );
+            for (auto i = 0; i < tmp.size(); i++)
+                tmp[i]->Update();
         }
 };

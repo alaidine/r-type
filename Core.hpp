@@ -82,4 +82,8 @@ class Core {
         void SetSystemSignature(Signature signature) {
             _systemManager->Setsignature<T>(signature);
         }
+
+        void UpdateAllSystem() {
+            _systemManager->SystemUpdateOrder();
+        }
 };

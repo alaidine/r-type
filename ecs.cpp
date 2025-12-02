@@ -1,46 +1,70 @@
 #include "Core.hpp"
 #include "System/GravitySystem.hpp"
+#include "System/RendererSystem.hpp"
+#include "System/InputControllerSystem.hpp"
 #include "Builder/Builder.hpp"
+#include "Prefab.hpp"
+#include <stdlib.h>
+#include <time.h>
 
 Core _core;
 
 int main() {
     _core.Init();
-    
-    // _core.RegisterComponent<Position>();
-    // _core.RegisterComponent<Gravity>();
-    // _core.RegisterComponent<Velocity>();
-    MiniBuilder::RegisterComponentBuilder registerTest;
-    registerTest.RegisterComponents<Position, Gravity, Velocity>();
 
+    const int screenWidth = 800;
+    const int screenHeight = 450;
+
+    InitWindow(screenWidth, screenHeight, "TEST");
+    
+    MiniBuilder::RegisterComponentBuilder registerTest;
+    registerTest.RegisterComponents<Position, Gravity, Velocity, Sprite, InputController>(_core);
 
     auto gravitySystem = _core.RegisterSystem<GravitySystem>();
+    gravitySystem->order = 2;
+    auto renderSystem = _core.RegisterSystem<RendererSystem>();
+    renderSystem->order = 3;
+    auto inputControllerSystem = _core.RegisterSystem<InputControllerSystem>();
+    inputControllerSystem->order = 1;
 
     Signature gravitySignature;
+    Signature RenderSignature;
+    Signature inputControllerSignature;
 
-    // gravitySignature.set(_core.GetComponentType<Gravity>(), true);
-    // gravitySignature.set(_core.GetComponentType<Position>(), true);
+    MiniBuilder::SystemBuilder gravityBuilder(gravitySignature);
+    gravityBuilder.BuildSignature<GravitySystem, Gravity, Position>(_core);
 
-    // _core.SetSystemSignature<GravitySystem>(gravitySignature);
-    MiniBuilder::SystemBuilder sysBuilder(gravitySignature);
-    sysBuilder.BuildSignature<GravitySystem, Gravity, Position>();
+    MiniBuilder::SystemBuilder rendererBuilder(RenderSignature);
+    rendererBuilder.BuildSignature<RendererSystem, Position, Sprite>(_core);
 
-    // Entity player = _core.CreateEntity();
-    // _core.AddComponent(player, Position{4.0f, 2.0f});
-    // _core.AddComponent(player, Gravity{-9.81f});
+    MiniBuilder::SystemBuilder inputControllerBuilder(inputControllerSignature);
+    inputControllerBuilder.BuildSignature<InputControllerSystem, Position, Velocity, InputController>(_core);
 
-    // Entity ship = _core.CreateEntity();
-    // _core.AddComponent(ship, Position{4.0f, 2.0f});
+    Entity player = Prefab::MakePlayer(_core, (float)screenWidth/2, (float)screenHeight/2);
+    
+    srand(time(NULL));
 
-    Entity player = _core.CreateEntity();
-    MiniBuilder::EntityBuilder playerBuilder(player);
-    playerBuilder.BuildEntity(Position{8.0f, 8.0f}, Gravity{8.0f});
+    Entity enemy1[1000];
 
-    Entity enemy = _core.CreateEntity();
-    MiniBuilder::EntityBuilder enemyBuilder(enemy);
-    enemyBuilder.BuildEntity(Position{4.0f, 2.0f}, Gravity{8.0f});
+    for (int i = 0; i < 1000; i++)
+        enemy1[i] = Prefab::MakeEnemy(_core, rand() % 800 + 1, rand() % 450+ 1);
+ 
+    SetTargetFPS(60);
 
-    gravitySystem->Update();
+    while (!WindowShouldClose()) {
+        
+        BeginDrawing();
+        
+        ClearBackground(WHITE);
+        DrawText("Test text", 10, 10, 20, BLACK);
+        
+        _core.UpdateAllSystem();
+        
+        EndDrawing();
+    }
+    
+
+    CloseWindow();
 
     return 0;
 }
