@@ -78,7 +78,6 @@ void fire(Vector2& missilePos, Vector2& palyerPos, AnimationComponent& missileAn
 class InputControllerSystem : public System {
     public:
         void Update() override {
-            std::cout << "2" << std::endl;
             for (auto& entity: _entities) {
                 auto& pos = _core.GetComponent<Position>(entity);
                 auto& input = _core.GetComponent<InputController>(entity);
@@ -104,7 +103,6 @@ class InputControllerSystem : public System {
                     pos.position.x = MAX(0, pos.position.x - 5);
                 else if (IsKeyDown(KEY_RIGHT) || IsKeyDown(KEY_D))
                     pos.position.x = MIN(GAME_WIDTH - 50, pos.position.x + 5);
-                // DrawPlayer(pos, playertexture.texture);
             }
         }
 };

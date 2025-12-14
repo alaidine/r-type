@@ -8,14 +8,15 @@ extern Core _core;
 
 
 class RendererSystem : public System {
+    private:
+        Texture2D texture;
+        Rectangle sourcerec;
+        Rectangle destrec;
+        Rectangle rec;
+        Vector2 origin = { 0.0f, 0.0f};
     public:
         void Update() override {
-            Texture2D texture;
-            Rectangle sourcerec;
-            Rectangle destrec;
-            Rectangle rec;
-            Vector2 origin = { 0.0f, 0.0f};
-            std::cout << "3" << std::endl;
+           
             for (auto const& entity: _entities) {
                 auto& pos = _core.GetComponent<Position>(entity);
                 auto& sprite = _core.GetComponent<Sprite>(entity);

@@ -25,6 +25,7 @@ class Core {
             _entityManager->DestroyEntity(entity);
             _componentManager->EntityDestroyed(entity);
             _systemManager->EntityDestroyed(entity);
+            std::cout << "entity bien destroy" << std::endl;
         }
 
         void printSignature(Entity entity) {

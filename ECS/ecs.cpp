@@ -21,8 +21,7 @@ int main() {
     MiniBuilder::RegisterComponentBuilder registerTest;
     registerTest.RegisterComponents<Position, Gravity, Velocity, Sprite, InputController, PlayerSprite, AnimationComponent, Tag, MissileTag, playerCooldown>(_core);
 
-    // auto gravitySystem = _core.RegisterSystem<GravitySystem>();
-    // gravitySystem->order = 2;
+ 
     auto renderSystem = _core.RegisterSystem<RendererSystem>();
     renderSystem->order = 3;
     auto inputControllerSystem = _core.RegisterSystem<InputControllerSystem>();
@@ -35,9 +34,6 @@ int main() {
     Signature inputControllerSignature;
     Signature missileSystemSignature;
 
-    // MiniBuilder::SystemBuilder gravityBuilder(gravitySignature);
-    // gravityBuilder.BuildSignature<GravitySystem, Gravity, Position>(_core);
-
     MiniBuilder::SystemBuilder rendererBuilder(RenderSignature);
     rendererBuilder.BuildSignature<RendererSystem, Position, Sprite, AnimationComponent>(_core);
 
@@ -48,8 +44,6 @@ int main() {
     missileSystemBuilder.BuildSignature<MissileSystem ,Position, AnimationComponent, MissileTag>(_core);
 
     Entity player = Prefab::MakePlayer(_core, (float)screenWidth/2, (float)screenHeight/2);
-    
-    srand(time(NULL));
 
     SetTargetFPS(TARGET_FPS);
 
@@ -60,10 +54,7 @@ int main() {
         ClearBackground(LIGHTGRAY);
         DrawText("Test text", 10, 10, 20, BLACK);
         
-        // _core.UpdateAllSystem();
-        inputControllerSystem->Update();
-        missileSystem->Update();
-        renderSystem->Update();
+        _core.UpdateAllSystem();
         
         EndDrawing();
     }

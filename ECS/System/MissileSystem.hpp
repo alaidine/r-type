@@ -2,6 +2,7 @@
     #include "../Core.hpp"
     #include "System.hpp"
     #define TARGET_FPS 100
+    #define GAME_WIDTH 800
 
 extern Core _core;
 
@@ -22,6 +23,7 @@ void AnimMissile(Position& pos, AnimationComponent& anim) {
     pos.position.x += 5;
 }
 
+
 class MissileSystem : public System {
     public:
         void Update() override {
@@ -30,6 +32,11 @@ class MissileSystem : public System {
                 auto& anim = _core.GetComponent<AnimationComponent>(entity);
                 auto& tag = _core.GetComponent<MissileTag>(entity);
                 AnimMissile(pos, anim);
+                if (pos.position.x > GAME_WIDTH) {
+                    std::cout << "Destroying missile at x=" << pos.position.x << std::endl;
+                    _core.DestroyEntity(entity);
+                    break;
+                }
             }
         }
 };
