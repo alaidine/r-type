@@ -2,15 +2,7 @@
 
 #include "raylib.h"
 #include "framework.h"
-
-#define NBN_LogInfo(...) TraceLog(LOG_INFO, __VA_ARGS__)
-#define NBN_LogError(...) TraceLog(LOG_ERROR, __VA_ARGS__)
-#define NBN_LogWarning(...) TraceLog(LOG_WARNING, __VA_ARGS__)
-#define NBN_LogDebug(...) TraceLog(LOG_DEBUG, __VA_ARGS__)
-#define NBN_LogTrace(...) TraceLog(LOG_TRACE, __VA_ARGS__)
-
-#include "nbnet.h"
-#include "udp.h"
+#include "netlib.hpp"
 
 #define PROTOCOL_NAME "rt-protocol"
 #define PORT 42042
@@ -52,12 +44,19 @@
 // A code passed by the server when closing a client connection due to being full (max client count reached)
 #define SERVER_FULL_CODE 42
 
-// Message ids
-enum
+// Client timeout in ticks (if no message received for this many ticks, client is considered disconnected)
+#define CLIENT_TIMEOUT_TICKS 180
+
+// Message types
+enum MessageType : uint8_t
 {
-    UPDATE_STATE_MESSAGE,
-    MISSILES_STATE_MESSAGE,
-    GAME_STATE_MESSAGE
+    MSG_CONNECT_REQUEST = 1,
+    MSG_CONNECT_ACCEPT,
+    MSG_CONNECT_REJECT,
+    MSG_DISCONNECT,
+    MSG_UPDATE_STATE,
+    MSG_GAME_STATE,
+    MSG_HEARTBEAT
 };
 
 typedef struct
@@ -106,6 +105,14 @@ typedef struct
     MobState mobs[MAX_MOBS];
 } GameStateMessage;
 
+// Connection accept data sent to client
+typedef struct
+{
+    uint32_t client_id;
+    int spawn_x;
+    int spawn_y;
+} ConnectAcceptData;
+
 // Store all options from the command line
 typedef struct
 {
@@ -115,13 +122,24 @@ typedef struct
     float jitter;
 } Options;
 
-UpdateStateMessage* UpdateStateMessage_Create(void);
-void UpdateStateMessage_Destroy(UpdateStateMessage*);
-int UpdateStateMessage_Serialize(UpdateStateMessage*, NBN_Stream*);
+// Serialization functions using NetBuffer
+void SerializeMissile(NetBuffer& buffer, const Missile& missile);
+Missile DeserializeMissile(NetBuffer& buffer);
 
-GameStateMessage* GameStateMessage_Create(void);
-void GameStateMessage_Destroy(GameStateMessage*);
-int GameStateMessage_Serialize(GameStateMessage*, NBN_Stream*);
+void SerializeUpdateStateMessage(NetBuffer& buffer, const UpdateStateMessage& msg);
+UpdateStateMessage DeserializeUpdateStateMessage(NetBuffer& buffer);
+
+void SerializeClientState(NetBuffer& buffer, const ClientState& state);
+ClientState DeserializeClientState(NetBuffer& buffer);
+
+void SerializeMobState(NetBuffer& buffer, const MobState& mob);
+MobState DeserializeMobState(NetBuffer& buffer);
+
+void SerializeGameStateMessage(NetBuffer& buffer, const GameStateMessage& msg);
+GameStateMessage DeserializeGameStateMessage(NetBuffer& buffer);
+
+void SerializeConnectAcceptData(NetBuffer& buffer, const ConnectAcceptData& data);
+ConnectAcceptData DeserializeConnectAcceptData(NetBuffer& buffer);
 
 int ReadCommandLine(int, char* []);
 Options GetOptions(void);

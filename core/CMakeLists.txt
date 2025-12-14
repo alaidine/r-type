@@ -3,6 +3,7 @@ add_library(${CORE_LIB} STATIC
     shared.cpp
     shared.h
     framework.h
+    netlib.hpp
     nbnet.h
     udp.h
 )

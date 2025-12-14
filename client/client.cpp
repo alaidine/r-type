@@ -1,18 +1,27 @@
 #include "client.h"
+#include <algorithm>
+
+#ifndef MAX
+#define MAX(a, b) ((a) > (b) ? (a) : (b))
+#endif
+#ifndef MIN
+#define MIN(a, b) ((a) < (b) ? (a) : (b))
+#endif
 
 Client::Client()
 {
     m_clientInitialized = false;
-    m_connected = false;         // Connected to the server
-    m_disconnected = false;      // Got disconnected from the server
-    m_spawned = false;           // Has spawned
-    m_serverCloseCode = 0;       // The server code used when closing the connection
+    m_connected = false;
+    m_disconnected = false;
+    m_spawned = false;
+    m_serverCloseCode = 0;
     m_localClientId = 0;
+    m_heartbeatTimer = 0;
     m_currentScreen = TITLE;
     m_updatedIds = { 0 };
     m_clientCount = 0;
     m_fireMissileKeyPressed = false;
-    m_tickDt = 1.0f / TICK_RATE; // Tick delta time (in seconds)
+    m_tickDt = 1.0f / TICK_RATE;
     m_acc = 0;
     m_letterCount = 0;
     m_textBox = { GAME_WIDTH / 2.0f - 170, 180, 365, 50 };
@@ -20,6 +29,7 @@ Client::Client()
     m_displayHUD = false;
     m_player = { 0 };
     m_background = { 0 };
+    m_mob = { 0 };
     m_localPlayerEntity = 0;
 
     m_missileAnimationRectangles[0] = { 0, 128, 25, 22 };
@@ -35,15 +45,18 @@ Client::Client()
 
 Client::~Client()
 {
-    // Unload textures
     UnloadTexture(m_player);
     UnloadTexture(m_background);
     UnloadTexture(m_mob);
-    if (m_clientInitialized)
+    
+    // Send disconnect message if connected
+    if (m_clientInitialized && m_connected && !m_disconnected)
     {
-        // Stop the client
-        NBN_GameClient_Stop();
+        NetBuffer buffer;
+        buffer.WriteUInt8(MSG_DISCONNECT);
+        m_netClient->Send(buffer);
     }
+    
     CloseWindow();
 }
 
@@ -51,7 +64,6 @@ void Client::InitECS(void)
 {
     m_ecsCore.Init();
 
-    // Register all components needed for networked clients
     MiniBuilder::RegisterComponentBuilder registerBuilder;
     registerBuilder.RegisterComponents<
         Position,
@@ -67,12 +79,10 @@ void Client::InitECS(void)
         RemotePlayerTag
     >(m_ecsCore);
 
-    // Register systems
     m_clientRendererSystem = m_ecsCore.RegisterSystem<ClientRendererSystem>();
     m_clientRendererSystem->order = 1;
     m_clientRendererSystem->SetPlayerTexture(&m_player);
 
-    // Set system signatures
     Signature clientRendererSignature;
     clientRendererSignature.set(m_ecsCore.GetComponentType<Position>(), true);
     clientRendererSignature.set(m_ecsCore.GetComponentType<Sprite>(), true);
@@ -87,40 +97,28 @@ void Client::SpawnLocalClient(int x, int y, uint32_t client_id)
 
     m_localClientId = client_id;
 
-    // Create local player entity using ECS
     m_localPlayerEntity = Prefab::MakeClient(m_ecsCore, (float)x, (float)y, client_id, true, m_player);
     m_clientEntities[client_id] = m_localPlayerEntity;
 
     m_spawned = true;
 }
 
-void Client::HandleConnection(void)
+void Client::HandleConnectAccept(NetBuffer& buffer)
 {
-    uint8_t data[32];
-    unsigned int data_len = NBN_GameClient_ReadServerData(data);
-    NBN_ReadStream rs;
-
-    NBN_ReadStream_Init(&rs, data, data_len);
-
-    unsigned int x = 0;
-    unsigned int y = 0;
-    unsigned int client_id = 0;
-
-    NBN_SerializeUInt(((NBN_Stream*)&rs), x, 0, GAME_WIDTH);
-    NBN_SerializeUInt(((NBN_Stream*)&rs), y, 0, GAME_HEIGHT);
-    NBN_SerializeUInt(((NBN_Stream*)&rs), client_id, 0, UINT_MAX);
-
-    SpawnLocalClient(x, y, client_id);
-
+    ConnectAcceptData data = DeserializeConnectAcceptData(buffer);
+    
+    TraceLog(LOG_INFO, "Connection accepted by server");
+    
+    SpawnLocalClient(data.spawn_x, data.spawn_y, data.client_id);
     m_connected = true;
 }
 
-void Client::HandleDisconnection(void)
+void Client::HandleConnectReject(NetBuffer& buffer)
 {
-    int code = NBN_GameClient_GetServerCloseCode(); // Get the server code used when closing the client connection
-
-    TraceLog(LOG_INFO, "Disconnected from server (code: %d)", code);
-
+    int code = buffer.ReadInt32();
+    
+    TraceLog(LOG_INFO, "Connection rejected by server (code: %d)", code);
+    
     m_disconnected = true;
     m_serverCloseCode = code;
 }
@@ -135,7 +133,6 @@ void Client::CreateClient(ClientState state)
     TraceLog(LOG_DEBUG, "CreateClient %d", state.client_id);
     assert(m_clientCount < MAX_CLIENTS - 1);
 
-    // Create a new remote client entity using ECS
     Entity clientEntity = Prefab::MakeClient(m_ecsCore, (float)state.x, (float)state.y, state.client_id, false, m_player);
     m_clientEntities[state.client_id] = clientEntity;
 
@@ -154,12 +151,10 @@ void Client::UpdateClient(ClientState state)
 
     Entity entity = it->second;
 
-    // Update the position component with the latest state from the server
     auto& pos = m_ecsCore.GetComponent<Position>(entity);
     pos.position.x = (float)state.x;
     pos.position.y = (float)state.y;
 
-    // Update missiles for this remote client
     m_remoteMissiles[state.client_id].clear();
     for (unsigned int i = 0; i < state.missile_count; i++)
     {
@@ -176,23 +171,17 @@ void Client::DestroyClient(uint32_t client_id)
 
         m_ecsCore.DestroyEntity(it->second);
         m_clientEntities.erase(it);
-        m_remoteMissiles.erase(client_id); // Clean up missiles for this client
+        m_remoteMissiles.erase(client_id);
         m_clientCount--;
     }
 }
 
 void Client::DestroyDisconnectedClients(void)
 {
-    /* 
-     * Loop over all remote client entities and remove the ones that have not
-     * been updated with the last received game state.
-     * This is how we detect disconnected clients.
-     */
     std::vector<uint32_t> toDestroy;
 
     for (auto& [client_id, entity] : m_clientEntities)
     {
-        // Skip local client
         if (client_id == m_localClientId)
             continue;
 
@@ -217,99 +206,119 @@ void Client::DestroyDisconnectedClients(void)
     }
 }
 
-void Client::HandleGameStateMessage(GameStateMessage* msg)
+void Client::HandleGameStateMessage(NetBuffer& buffer)
 {
     if (!m_spawned)
         return;
 
-    // Start by resetting the updated client ids array
+    GameStateMessage msg = DeserializeGameStateMessage(buffer);
+
     for (int i = 0; i < MAX_CLIENTS; i++)
         m_updatedIds[i] = -1;
 
-    // Loop over the received client states
-    for (unsigned int i = 0; i < msg->client_count; i++)
+    for (unsigned int i = 0; i < msg.client_count; i++)
     {
-        ClientState state = msg->client_states[i];
+        ClientState state = msg.client_states[i];
 
-        // Ignore the state of the local client
         if (state.client_id != m_localClientId)
         {
-            // If the client already exists we update it with the latest received state
             if (ClientExists(state.client_id))
                 UpdateClient(state);
-            else // If the client does not exist, we create it
+            else
                 CreateClient(state);
 
             m_updatedIds[i] = state.client_id;
         }
     }
 
-    // Update mobs from server
     m_mobs.clear();
-    for (unsigned int i = 0; i < msg->mob_count; i++)
+    for (unsigned int i = 0; i < msg.mob_count; i++)
     {
-        m_mobs.push_back(msg->mobs[i]);
+        m_mobs.push_back(msg.mobs[i]);
     }
 
-    // Destroy disconnected clients
     DestroyDisconnectedClients();
-
-    GameStateMessage_Destroy(msg);
 }
 
-void Client::HandleReceivedMessage(void)
+void Client::HandleReceivedMessages(void)
 {
-    // Fetch info about the last received message
-    NBN_MessageInfo msg_info = NBN_GameClient_GetMessageInfo();
-
-    switch (msg_info.type)
+    NetBuffer buffer;
+    
+    while (m_netClient->Receive(buffer) > 0)
     {
-    // We received the latest game state from the server
-    case GAME_STATE_MESSAGE:
-        HandleGameStateMessage((GameStateMessage*)msg_info.data);
-        break;
+        if (!buffer.CanRead(1))
+        {
+            buffer.Clear();
+            continue;
+        }
+
+        uint8_t msgType = buffer.ReadUInt8();
+
+        switch (msgType)
+        {
+        case MSG_CONNECT_ACCEPT:
+            HandleConnectAccept(buffer);
+            break;
+
+        case MSG_CONNECT_REJECT:
+            HandleConnectReject(buffer);
+            break;
+
+        case MSG_GAME_STATE:
+            HandleGameStateMessage(buffer);
+            break;
+        }
+
+        buffer.Clear();
     }
 }
 
-void Client::HandleGameClientEvent(int ev)
+int Client::SendConnectRequest(void)
 {
-    switch (ev)
+    NetBuffer buffer;
+    buffer.WriteUInt8(MSG_CONNECT_REQUEST);
+    
+    if (!m_netClient->Send(buffer))
     {
-    case NBN_CONNECTED:
-        // We are connected to the server
-        HandleConnection();
-        break;
-
-    case NBN_DISCONNECTED:
-        // The server has closed our connection
-        HandleDisconnection();
-        break;
-
-    case NBN_MESSAGE_RECEIVED:
-        // We received a message from the server
-        HandleReceivedMessage();
-        break;
+        TraceLog(LOG_WARNING, "Failed to send connect request");
+        return -1;
     }
+    
+    return 0;
 }
 
 int Client::SendPositionUpdate(void)
 {
-    UpdateStateMessage* msg = UpdateStateMessage_Create();
+    if (!m_connected || m_disconnected)
+        return 0;
 
-    // Get position from local player entity
+    NetBuffer buffer;
+    buffer.WriteUInt8(MSG_UPDATE_STATE);
+
     auto& pos = m_ecsCore.GetComponent<Position>(m_localPlayerEntity);
 
-    // Fill message data
-    msg->x = (int)pos.position.x;
-    msg->y = (int)pos.position.y;
-    msg->missile_count = std::min((unsigned int)m_missiles.size(), (unsigned int)MAX_MISSILES_CLIENT);
-    memcpy(msg->missiles, m_missiles.data(), msg->missile_count * sizeof(Missile));
+    UpdateStateMessage msg;
+    msg.x = (int)pos.position.x;
+    msg.y = (int)pos.position.y;
+    msg.missile_count = std::min((unsigned int)m_missiles.size(), (unsigned int)MAX_MISSILES_CLIENT);
+    memcpy(msg.missiles, m_missiles.data(), msg.missile_count * sizeof(Missile));
 
-    // Unreliably send it to the server
-    if (NBN_GameClient_SendUnreliableMessage(UPDATE_STATE_MESSAGE, msg) < 0)
+    SerializeUpdateStateMessage(buffer, msg);
+
+    if (!m_netClient->Send(buffer))
         return -1;
 
     return 0;
+}
+
+void Client::SendHeartbeat(void)
+{
+    if (!m_connected || m_disconnected)
+        return;
+
+    NetBuffer buffer;
+    buffer.WriteUInt8(MSG_HEARTBEAT);
+    m_netClient->Send(buffer);
 }
 
 int Client::UpdateGameplay(void)
@@ -317,10 +326,8 @@ int Client::UpdateGameplay(void)
     if (!m_spawned)
         return 0;
 
-    // Get local player position component
     auto& pos = m_ecsCore.GetComponent<Position>(m_localPlayerEntity);
 
-    // Firing missile
     if (IsKeyDown(KEY_SPACE) && !m_fireMissileKeyPressed)
     {
         m_fireMissileKeyPressed = true;
@@ -331,7 +338,6 @@ int Client::UpdateGameplay(void)
     if (IsKeyUp(KEY_SPACE))
         m_fireMissileKeyPressed = false;
 
-    // Movement code
     if (IsKeyDown(KEY_UP) || IsKeyDown(KEY_W))
         pos.position.y = MAX(0, pos.position.y - 5);
     else if (IsKeyDown(KEY_DOWN) || IsKeyDown(KEY_S))
@@ -342,12 +348,18 @@ int Client::UpdateGameplay(void)
     else if (IsKeyDown(KEY_RIGHT) || IsKeyDown(KEY_D))
         pos.position.x = MIN(GAME_WIDTH - 50, pos.position.x + 5);
 
-    // Send the latest local client state to the server
     if (SendPositionUpdate() < 0)
     {
         TraceLog(LOG_WARNING, "Failed to send client state update");
-
         return -1;
+    }
+
+    // Send heartbeat every 60 ticks
+    m_heartbeatTimer++;
+    if (m_heartbeatTimer >= 60)
+    {
+        SendHeartbeat();
+        m_heartbeatTimer = 0;
     }
 
     return 0;
@@ -360,15 +372,9 @@ void Client::DrawClient(Entity entity)
 
 void Client::DrawHUD(void)
 {
-    NBN_ConnectionStats stats = NBN_GameClient_GetStats();
-    unsigned int ping = stats.ping * 1000;
-    unsigned int packet_loss = stats.packet_loss * 100;
-
     DrawText(TextFormat("FPS: %d", GetFPS()), 450, 350, 32, MAROON);
-    DrawText(TextFormat("Ping: %d ms", ping), 450, 400, 32, MAROON);
-    DrawText(TextFormat("Packet loss: %d %%", packet_loss), 450, 450, 32, MAROON);
-    DrawText(TextFormat("Upload: %.1f Bps", stats.upload_bandwidth), 450, 500, 32, MAROON);
-    DrawText(TextFormat("Download: %.1f Bps", stats.download_bandwidth), 450, 550, 32, MAROON);
+    DrawText(TextFormat("Client ID: %d", m_localClientId), 450, 400, 32, MAROON);
+    DrawText(TextFormat("Connected: %s", m_connected ? "Yes" : "No"), 450, 450, 32, MAROON);
 }
 
 void Client::DrawBackground(void)
@@ -389,36 +395,27 @@ void Client::DrawGameplay(void)
 
     if (m_disconnected)
     {
-        if (m_serverCloseCode == -1)
-        {
-            if (m_connected)
-                DrawText("Connection to the server was lost", 265, 280, 20, RED);
-            else
-                DrawText("Server cannot be reached", 265, 280, 20, RED);
-        }
-        else if (m_serverCloseCode == SERVER_FULL_CODE)
+        if (m_serverCloseCode == SERVER_FULL_CODE)
         {
             DrawText("Cannot connect, server is full", 265, 280, 20, RED);
+        }
+        else
+        {
+            DrawText("Connection to the server was lost", 265, 280, 20, RED);
         }
     }
     else if (m_connected && m_spawned)
     {
-        // Start by drawing the background
         DrawBackground();
 
-        // Draw all client entities using ECS
         for (auto& [client_id, entity] : m_clientEntities)
         {
             DrawClient(entity);
         }
 
-        // Draw the missiles
         DrawMissiles();
-
-        // Draw the mobs
         DrawMobs();
 
-        // Draw hud if m_hudDisplay variable is true
         if (m_displayHUD)
         {
             DrawHUD();
@@ -444,12 +441,11 @@ void Client::UpdateAndDraw(void)
         }
 
         BeginDrawing();
-
         ClearBackground(RAYWHITE);
         DrawText("R-Type", 190, 200, 20, DARKGRAY);
-
         EndDrawing();
     } break;
+
     case IP_ADDRESS:
     {
         if (IsKeyPressed(KEY_ENTER))
@@ -458,24 +454,20 @@ void Client::UpdateAndDraw(void)
             m_currentScreen = GAMEPLAY;
         }
 
-        // Set the window's cursor to the I-Beam
         SetMouseCursor(MOUSE_CURSOR_IBEAM);
 
-        // Get char pressed (unicode character) on the queue
         int key = GetCharPressed();
 
-        // Check if more characters have been pressed on the same frame
         while (key > 0)
         {
-            // NOTE: Only allow keys in range [32..125]
             if ((key >= 32) && (key <= 125) && (m_letterCount < MAX_INPUT_CHARS))
             {
                 m_serverIp[m_letterCount] = (char)key;
-                m_serverIp[m_letterCount + 1] = '\0'; // Add null terminator at the end of the string
+                m_serverIp[m_letterCount + 1] = '\0';
                 m_letterCount++;
             }
 
-            key = GetCharPressed();  // Check next character in the queue
+            key = GetCharPressed();
         }
 
         if (IsKeyPressed(KEY_BACKSPACE))
@@ -488,50 +480,38 @@ void Client::UpdateAndDraw(void)
         m_framesCounter++;
 
         BeginDrawing();
-
         ClearBackground(RAYWHITE);
 
         DrawRectangleRec(m_textBox, LIGHTGRAY);
         DrawRectangleLines((int)m_textBox.x, (int)m_textBox.y, (int)m_textBox.width, (int)m_textBox.height, RED);
 
         DrawText(m_serverIp, (int)m_textBox.x + 5, (int)m_textBox.y + 8, 40, MAROON);
-
         DrawText(TextFormat("INPUT CHARS: %i/%i", m_letterCount, MAX_INPUT_CHARS), 315, 250, 20, DARKGRAY);
 
         if (m_letterCount < MAX_INPUT_CHARS)
         {
-            // Draw blinking underscore char
-            if (((m_framesCounter / 20) % 2) == 0) DrawText("_", (int)m_textBox.x + 8 + MeasureText(m_serverIp, 40), (int)m_textBox.y + 12, 40, MAROON);
+            if (((m_framesCounter / 20) % 2) == 0)
+                DrawText("_", (int)m_textBox.x + 8 + MeasureText(m_serverIp, 40), (int)m_textBox.y + 12, 40, MAROON);
         }
-        else DrawText("Press BACKSPACE to delete chars...", 230, 300, 20, GRAY);
+        else
+            DrawText("Press BACKSPACE to delete chars...", 230, 300, 20, GRAY);
 
         EndDrawing();
     } break;
+
     case GAMEPLAY:
     {
-        // Very basic fixed timestep implementation.
-        // Target FPS is 100 but the simulation runs at
-        // TICK_RATE ticks per second.
-        //
-        // We keep track of accumulated times and simulates as many tick as we can using that time
+        m_acc += GetFrameTime();
 
-        m_acc += GetFrameTime(); // Accumulates time
-
-        // Simulates as many ticks as we can
         while (m_acc >= m_tickDt)
         {
-            int ev;
+            // Handle received messages
+            HandleReceivedMessages();
 
-            while ((ev = NBN_GameClient_Poll()) != NBN_NO_EVENT)
+            // Send connect request if not connected yet
+            if (!m_connected && !m_disconnected)
             {
-                if (ev < 0)
-                {
-                    TraceLog(LOG_WARNING, "An occured while polling network events. Exit");
-
-                    break;
-                }
-
-                HandleGameClientEvent(ev);
+                SendConnectRequest();
             }
 
             if (m_connected && !m_disconnected)
@@ -540,59 +520,29 @@ void Client::UpdateAndDraw(void)
                     break;
             }
 
-            if (!m_disconnected)
-            {
-                if (NBN_GameClient_SendPackets() < 0)
-                {
-                    TraceLog(LOG_ERROR, "An occured while flushing the send queue. Exit");
-
-                    break;
-                }
-            }
-
-            m_acc -= m_tickDt; // Consumes time
+            m_acc -= m_tickDt;
         }
 
         DrawGameplay();
     } break;
+
     default: break;
     }
 }
 
 void Client::InitClient(char* serverIp)
 {
-    NBN_UDP_Register();
-
-    // Initialize the client with a protocol name (must be the same than the one used by the server), the server ip address and port
-
-    // Start the client with a protocol name (must be the same than the one used by the server)
-    // the server host and port
-    if (NBN_GameClient_StartEx(PROTOCOL_NAME, serverIp, PORT, NULL, 0) < 0)
+    m_netClient = std::make_unique<NetClient>();
+    
+    if (!m_netClient->Connect(serverIp, PORT))
     {
-        TraceLog(LOG_WARNING, "Game client failed to start. Exit");
-
+        TraceLog(LOG_WARNING, "Failed to connect to server at %s:%d", serverIp, PORT);
+        m_disconnected = true;
+        m_serverCloseCode = -1;
         return;
     }
 
-    // Register messages, have to be done after NBN_GameClient_StartEx
-    // Messages need to be registered on both client and server side
-    NBN_GameClient_RegisterMessage(
-        UPDATE_STATE_MESSAGE,
-        (NBN_MessageBuilder)UpdateStateMessage_Create,
-        (NBN_MessageDestructor)UpdateStateMessage_Destroy,
-        (NBN_MessageSerializer)UpdateStateMessage_Serialize);
-    NBN_GameClient_RegisterMessage(
-        GAME_STATE_MESSAGE,
-        (NBN_MessageBuilder)GameStateMessage_Create,
-        (NBN_MessageDestructor)GameStateMessage_Destroy,
-        (NBN_MessageSerializer)GameStateMessage_Serialize);
-
-    // Network conditions simulated variables (read from the command line, default is always 0)
-    NBN_GameClient_SetPing(GetOptions().ping);
-    NBN_GameClient_SetJitter(GetOptions().jitter);
-    NBN_GameClient_SetPacketLoss(GetOptions().packet_loss);
-    NBN_GameClient_SetPacketDuplication(GetOptions().packet_duplication);
-
+    TraceLog(LOG_INFO, "Connecting to server at %s:%d", serverIp, PORT);
     m_clientInitialized = true;
 }
 
@@ -602,12 +552,10 @@ void Client::Init(void)
     InitWindow(GAME_WIDTH, GAME_HEIGHT, "R-Type");
     SetTargetFPS(TARGET_FPS);
 
-    // Load textures
     m_player = LoadTexture("resources/sprites/player_r-9c_war-head.png");
     m_background = LoadTexture("resources/sprites/space_background.png");
     m_mob = LoadTexture("resources/sprites/mob_bydo_minions.png");
 
-    // Initialize ECS after textures are loaded
     InitECS();
 }
 
@@ -621,7 +569,6 @@ void Client::Run(void)
 
 void Client::Fire(void)
 {
-    // Get local player position
     auto& playerPos = m_ecsCore.GetComponent<Position>(m_localPlayerEntity);
 
     Missile missile = {
@@ -679,7 +626,6 @@ void Client::DrawMissiles(void)
         DrawTexturePro(m_player, sourceRec, destRec, origin, 0.0f, WHITE);
     }
 
-    // Draw missiles from remote clients
     for (auto& [client_id, missiles] : m_remoteMissiles)
     {
         for (const Missile& missile : missiles)
@@ -714,6 +660,9 @@ void Client::DrawMobs(void)
 
 int main(int argc, char* argv[])
 {
+    (void)argc;
+    (void)argv;
+
     Client client;
 
     client.Init();

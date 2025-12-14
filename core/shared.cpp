@@ -2,110 +2,178 @@
 
 #include <stdlib.h>
 #include <limits.h>
-
-#define NBNET_IMPL
-#include "nbnet.h"
-#include "udp.h"
+#include <cstring>
 
 // Command line options
-enum
-{
-    OPT_MESSAGES_COUNT,
-    OPT_PACKET_LOSS,
-    OPT_PACKET_DUPLICATION,
-    OPT_PING,
-    OPT_JITTER
-};
-
 static Options options = { 0 };
 
-UpdateStateMessage* UpdateStateMessage_Create(void)
+// Serialization functions using NetBuffer
+
+void SerializeMissile(NetBuffer& buffer, const Missile& missile)
 {
-    return (UpdateStateMessage*)calloc(1, sizeof(UpdateStateMessage));
+    buffer.WriteFloat(missile.pos.x);
+    buffer.WriteFloat(missile.pos.y);
+    buffer.WriteFloat(missile.rect.x);
+    buffer.WriteFloat(missile.rect.y);
+    buffer.WriteFloat(missile.rect.width);
+    buffer.WriteFloat(missile.rect.height);
+    buffer.WriteUInt32(missile.currentFrame);
+    buffer.WriteUInt32(missile.framesSpeed);
+    buffer.WriteUInt32(missile.framesCounter);
 }
 
-void UpdateStateMessage_Destroy(UpdateStateMessage* msg)
+Missile DeserializeMissile(NetBuffer& buffer)
 {
-    free(msg);
+    Missile missile;
+    missile.pos.x = buffer.ReadFloat();
+    missile.pos.y = buffer.ReadFloat();
+    missile.rect.x = buffer.ReadFloat();
+    missile.rect.y = buffer.ReadFloat();
+    missile.rect.width = buffer.ReadFloat();
+    missile.rect.height = buffer.ReadFloat();
+    missile.currentFrame = buffer.ReadUInt32();
+    missile.framesSpeed = buffer.ReadUInt32();
+    missile.framesCounter = buffer.ReadUInt32();
+    return missile;
 }
 
-int UpdateStateMessage_Serialize(UpdateStateMessage* msg, NBN_Stream* stream)
+void SerializeUpdateStateMessage(NetBuffer& buffer, const UpdateStateMessage& msg)
 {
-    NBN_SerializeUInt(stream, msg->x, 0, GAME_WIDTH);
-    NBN_SerializeUInt(stream, msg->y, 0, GAME_HEIGHT);
-
-    NBN_SerializeUInt(stream, msg->missile_count, 0, MAX_MISSILES_CLIENT);
-
-    for (unsigned int i = 0; i < msg->missile_count; i++)
+    buffer.WriteInt32(msg.x);
+    buffer.WriteInt32(msg.y);
+    buffer.WriteUInt32(msg.missile_count);
+    
+    for (unsigned int i = 0; i < msg.missile_count; i++)
     {
-
-        NBN_SerializeUInt(stream, msg->missiles[i].currentFrame, 0, UINT_MAX);
-        NBN_SerializeUInt(stream, msg->missiles[i].framesCounter, 0, UINT_MAX);
-        NBN_SerializeUInt(stream, msg->missiles[i].framesSpeed, 0, UINT_MAX);
-
-        NBN_SerializeFloat(stream, msg->missiles[i].rect.x, MIN_FLOAT_VAL, MAX_FLOAT_VAL, 3);
-        NBN_SerializeFloat(stream, msg->missiles[i].rect.y, MIN_FLOAT_VAL, MAX_FLOAT_VAL, 3);
-        NBN_SerializeFloat(stream, msg->missiles[i].rect.width, MIN_FLOAT_VAL, MAX_FLOAT_VAL, 3);
-        NBN_SerializeFloat(stream, msg->missiles[i].rect.height, MIN_FLOAT_VAL, MAX_FLOAT_VAL, 3);
-
-        NBN_SerializeFloat(stream, msg->missiles[i].pos.x, MIN_FLOAT_VAL, MAX_FLOAT_VAL, 3);
-        NBN_SerializeFloat(stream, msg->missiles[i].pos.y, MIN_FLOAT_VAL, MAX_FLOAT_VAL, 3);
+        SerializeMissile(buffer, msg.missiles[i]);
     }
-
-    return 0;
 }
 
-GameStateMessage* GameStateMessage_Create(void)
+UpdateStateMessage DeserializeUpdateStateMessage(NetBuffer& buffer)
 {
-    return (GameStateMessage*)calloc(1, sizeof(GameStateMessage));
-}
-
-void GameStateMessage_Destroy(GameStateMessage* msg)
-{
-    free(msg);
-}
-
-int GameStateMessage_Serialize(GameStateMessage* msg, NBN_Stream* stream)
-{
-    NBN_SerializeUInt(stream, msg->client_count, 0, MAX_CLIENTS);
-
-    for (unsigned int i = 0; i < msg->client_count; i++)
+    UpdateStateMessage msg;
+    msg.x = buffer.ReadInt32();
+    msg.y = buffer.ReadInt32();
+    msg.missile_count = buffer.ReadUInt32();
+    
+    if (msg.missile_count > MAX_MISSILES_CLIENT)
+        msg.missile_count = MAX_MISSILES_CLIENT;
+    
+    for (unsigned int i = 0; i < msg.missile_count; i++)
     {
-        NBN_SerializeUInt(stream, msg->client_states[i].client_id, 0, UINT_MAX);
-        NBN_SerializeUInt(stream, msg->client_states[i].x, 0, GAME_WIDTH);
-        NBN_SerializeUInt(stream, msg->client_states[i].y, 0, GAME_HEIGHT);
-
-        // Add missile serialization
-        NBN_SerializeUInt(stream, msg->client_states[i].missile_count, 0, MAX_MISSILES_CLIENT);
-
-        for (unsigned int j = 0; j < msg->client_states[i].missile_count; j++)
-        {
-            NBN_SerializeUInt(stream, msg->client_states[i].missiles[j].currentFrame, 0, UINT_MAX);
-            NBN_SerializeUInt(stream, msg->client_states[i].missiles[j].framesCounter, 0, UINT_MAX);
-            NBN_SerializeUInt(stream, msg->client_states[i].missiles[j].framesSpeed, 0, UINT_MAX);
-
-            NBN_SerializeFloat(stream, msg->client_states[i].missiles[j].rect.x, MIN_FLOAT_VAL, MAX_FLOAT_VAL, 3);
-            NBN_SerializeFloat(stream, msg->client_states[i].missiles[j].rect.y, MIN_FLOAT_VAL, MAX_FLOAT_VAL, 3);
-            NBN_SerializeFloat(stream, msg->client_states[i].missiles[j].rect.width, MIN_FLOAT_VAL, MAX_FLOAT_VAL, 3);
-            NBN_SerializeFloat(stream, msg->client_states[i].missiles[j].rect.height, MIN_FLOAT_VAL, MAX_FLOAT_VAL, 3);
-
-            NBN_SerializeFloat(stream, msg->client_states[i].missiles[j].pos.x, MIN_FLOAT_VAL, MAX_FLOAT_VAL, 3);
-            NBN_SerializeFloat(stream, msg->client_states[i].missiles[j].pos.y, MIN_FLOAT_VAL, MAX_FLOAT_VAL, 3);
-        }
+        msg.missiles[i] = DeserializeMissile(buffer);
     }
+    
+    return msg;
+}
 
-    // Serialize mobs
-    NBN_SerializeUInt(stream, msg->mob_count, 0, MAX_MOBS);
-
-    for (unsigned int i = 0; i < msg->mob_count; i++)
+void SerializeClientState(NetBuffer& buffer, const ClientState& state)
+{
+    buffer.WriteUInt32(state.client_id);
+    buffer.WriteInt32(state.x);
+    buffer.WriteInt32(state.y);
+    buffer.WriteUInt32(state.missile_count);
+    
+    for (unsigned int i = 0; i < state.missile_count; i++)
     {
-        NBN_SerializeUInt(stream, msg->mobs[i].mob_id, 0, UINT_MAX);
-        NBN_SerializeFloat(stream, msg->mobs[i].x, MIN_FLOAT_VAL, MAX_FLOAT_VAL, 3);
-        NBN_SerializeFloat(stream, msg->mobs[i].y, MIN_FLOAT_VAL, MAX_FLOAT_VAL, 3);
-        NBN_SerializeBool(stream, msg->mobs[i].active);
+        SerializeMissile(buffer, state.missiles[i]);
     }
+}
 
-    return 0;
+ClientState DeserializeClientState(NetBuffer& buffer)
+{
+    ClientState state;
+    state.client_id = buffer.ReadUInt32();
+    state.x = buffer.ReadInt32();
+    state.y = buffer.ReadInt32();
+    state.missile_count = buffer.ReadUInt32();
+    
+    if (state.missile_count > MAX_MISSILES_CLIENT)
+        state.missile_count = MAX_MISSILES_CLIENT;
+    
+    for (unsigned int i = 0; i < state.missile_count; i++)
+    {
+        state.missiles[i] = DeserializeMissile(buffer);
+    }
+    
+    return state;
+}
+
+void SerializeMobState(NetBuffer& buffer, const MobState& mob)
+{
+    buffer.WriteUInt32(mob.mob_id);
+    buffer.WriteFloat(mob.x);
+    buffer.WriteFloat(mob.y);
+    buffer.WriteUInt8(mob.active ? 1 : 0);
+}
+
+MobState DeserializeMobState(NetBuffer& buffer)
+{
+    MobState mob;
+    mob.mob_id = buffer.ReadUInt32();
+    mob.x = buffer.ReadFloat();
+    mob.y = buffer.ReadFloat();
+    mob.active = buffer.ReadUInt8() != 0;
+    return mob;
+}
+
+void SerializeGameStateMessage(NetBuffer& buffer, const GameStateMessage& msg)
+{
+    buffer.WriteUInt32(msg.client_count);
+    
+    for (unsigned int i = 0; i < msg.client_count; i++)
+    {
+        SerializeClientState(buffer, msg.client_states[i]);
+    }
+    
+    buffer.WriteUInt32(msg.mob_count);
+    
+    for (unsigned int i = 0; i < msg.mob_count; i++)
+    {
+        SerializeMobState(buffer, msg.mobs[i]);
+    }
+}
+
+GameStateMessage DeserializeGameStateMessage(NetBuffer& buffer)
+{
+    GameStateMessage msg;
+    msg.client_count = buffer.ReadUInt32();
+    
+    if (msg.client_count > MAX_CLIENTS)
+        msg.client_count = MAX_CLIENTS;
+    
+    for (unsigned int i = 0; i < msg.client_count; i++)
+    {
+        msg.client_states[i] = DeserializeClientState(buffer);
+    }
+    
+    msg.mob_count = buffer.ReadUInt32();
+    
+    if (msg.mob_count > MAX_MOBS)
+        msg.mob_count = MAX_MOBS;
+    
+    for (unsigned int i = 0; i < msg.mob_count; i++)
+    {
+        msg.mobs[i] = DeserializeMobState(buffer);
+    }
+    
+    return msg;
+}
+
+void SerializeConnectAcceptData(NetBuffer& buffer, const ConnectAcceptData& data)
+{
+    buffer.WriteUInt32(data.client_id);
+    buffer.WriteInt32(data.spawn_x);
+    buffer.WriteInt32(data.spawn_y);
+}
+
+ConnectAcceptData DeserializeConnectAcceptData(NetBuffer& buffer)
+{
+    ConnectAcceptData data;
+    data.client_id = buffer.ReadUInt32();
+    data.spawn_x = buffer.ReadInt32();
+    data.spawn_y = buffer.ReadInt32();
+    return data;
 }
 
 // Parse the command line
@@ -117,28 +185,28 @@ int ReadCommandLine(int argc, char* argv[])
         {
             if (i + 1 >= argc)
                 return -1; // Missing argument
-            options.packet_loss = atof(argv[i + 1]);
+            options.packet_loss = (float)atof(argv[i + 1]);
             i++; // Skip the argument value
         }
         else if (strcmp(argv[i], "--packet_duplication") == 0)
         {
             if (i + 1 >= argc)
                 return -1; // Missing argument
-            options.packet_duplication = atof(argv[i + 1]);
+            options.packet_duplication = (float)atof(argv[i + 1]);
             i++; // Skip the argument value
         }
         else if (strcmp(argv[i], "--ping") == 0)
         {
             if (i + 1 >= argc)
                 return -1; // Missing argument
-            options.ping = atof(argv[i + 1]);
+            options.ping = (float)atof(argv[i + 1]);
             i++; // Skip the argument value
         }
         else if (strcmp(argv[i], "--jitter") == 0)
         {
             if (i + 1 >= argc)
                 return -1; // Missing argument
-            options.jitter = atof(argv[i + 1]);
+            options.jitter = (float)atof(argv[i + 1]);
             i++; // Skip the argument value
         }
         else

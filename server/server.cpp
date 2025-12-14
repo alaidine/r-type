@@ -1,30 +1,32 @@
 #include "server.h"
+#include <csignal>
+#include <cstdlib>
+#include <cstring>
 
 Server* g_serverInstance = nullptr;
 
 static void SigintHandler(int dummy)
 {
+    (void)dummy;
     g_serverInstance->running = false;
 }
 
 Server::Server()
 {
-    g_serverInstance = this; // Set global instance pointer
+    g_serverInstance = this;
     signal(SIGINT, SigintHandler);
-    m_clients = {};
     m_spawns = {
         {50, 50},
         {GAME_WIDTH - 100, 50},
         {50, GAME_HEIGHT - 100},
         {GAME_WIDTH - 100, GAME_HEIGHT - 100}
     };
-    tick_dt = 1.0f / TICK_RATE; // Tick delta time
+    tick_dt = 1.0f / TICK_RATE;
 
     // Initialize mobs
     m_mobCount = 0;
     m_nextMobId = 0;
     m_mobSpawnTimer = 0;
-    m_mobs = {};
     for (auto& mob : m_mobs)
     {
         mob.active = false;
@@ -33,193 +35,183 @@ Server::Server()
 
 Server::~Server()
 {
-    // Stop the server
-    NBN_GameServer_Stop();
 }
 
-void Server::AcceptConnection(unsigned int x, unsigned int y, NBN_ConnectionHandle conn)
+bool Server::AddressEquals(const sockaddr_in& a, const sockaddr_in& b)
 {
-    NBN_WriteStream ws;
-    uint8_t data[32];
-
-    NBN_WriteStream_Init(&ws, data, sizeof(data));
-
-    NBN_SerializeUInt((NBN_Stream*)&ws, x, 0, GAME_WIDTH);
-    NBN_SerializeUInt((NBN_Stream*)&ws, y, 0, GAME_HEIGHT);
-    NBN_SerializeUInt((NBN_Stream*)&ws, conn, 0, UINT_MAX);
-
-    // Accept the connection
-    NBN_GameServer_AcceptIncomingConnectionWithData(data, sizeof(data));
+    return a.sin_addr.s_addr == b.sin_addr.s_addr && a.sin_port == b.sin_port;
 }
 
-int Server::HandleNewConnection(void)
+ConnectedClient* Server::FindClientByAddress(const sockaddr_in& addr)
 {
-    TraceLog(LOG_INFO, "New connection");
-
-    // If the server is full
-    if (m_clientCount== MAX_CLIENTS)
+    for (auto& [id, client] : m_clients)
     {
-        // Reject the connection (send a SERVER_FULL_CODE code to the client)
-        TraceLog(LOG_INFO, "Connection rejected");
-        NBN_GameServer_RejectIncomingConnectionWithCode(SERVER_FULL_CODE);
+        if (AddressEquals(client.address, addr))
+            return &client;
+    }
+    return nullptr;
+}
 
-        return 0;
+uint32_t Server::GetClientIdByAddress(const sockaddr_in& addr)
+{
+    ConnectedClient* client = FindClientByAddress(addr);
+    return client ? client->client_id : 0;
+}
+
+void Server::HandleConnectRequest(const sockaddr_in& from)
+{
+    TraceLog(LOG_INFO, "New connection request");
+
+    // Check if already connected
+    if (FindClientByAddress(from) != nullptr)
+    {
+        TraceLog(LOG_INFO, "Client already connected, ignoring");
+        return;
     }
 
-    // Otherwise...
-
-    NBN_ConnectionHandle client_handle;
-
-    client_handle = NBN_GameServer_GetIncomingConnection();
-
-    // Get a spawning position for the client
-    Vector2 spawn = m_spawns[client_handle % MAX_CLIENTS];
-
-    // Build some "initial" data that will be sent to the connected client
-
-    unsigned int x = (unsigned int)spawn.x;
-    unsigned int y = (unsigned int)spawn.y;
-
-    AcceptConnection(x, y, client_handle);
-
-    TraceLog(LOG_INFO, "Connection accepted (ID: %d)", client_handle);
-
-    Client* client = NULL;
-
-    // Find a free slot in the clients array and create a new client
-    for (int i = 0; i < MAX_CLIENTS; i++)
+    // Check if server is full
+    if (m_clients.size() >= MAX_CLIENTS)
     {
-        if (m_clients[i] == NULL)
-        {
-            client = (Client*)malloc(sizeof(Client));
-            m_clients[i] = client;
+        TraceLog(LOG_INFO, "Server full, rejecting connection");
+        
+        NetBuffer rejectBuffer;
+        rejectBuffer.WriteUInt8(MSG_CONNECT_REJECT);
+        rejectBuffer.WriteInt32(SERVER_FULL_CODE);
+        m_netServer->SendTo(rejectBuffer, from);
+        return;
+    }
 
-            break;
+    // Create new client
+    uint32_t client_id = m_nextClientId++;
+    Vector2 spawn = m_spawns[client_id % MAX_CLIENTS];
+
+    ConnectedClient newClient;
+    newClient.client_id = client_id;
+    newClient.address = from;
+    newClient.state.client_id = client_id;
+    newClient.state.x = (int)spawn.x;
+    newClient.state.y = (int)spawn.y;
+    newClient.state.missile_count = 0;
+    memset(newClient.state.missiles, 0, sizeof(newClient.state.missiles));
+    newClient.last_heard_tick = m_currentTick;
+
+    m_clients[client_id] = newClient;
+
+    // Send accept message
+    NetBuffer acceptBuffer;
+    acceptBuffer.WriteUInt8(MSG_CONNECT_ACCEPT);
+    
+    ConnectAcceptData acceptData;
+    acceptData.client_id = client_id;
+    acceptData.spawn_x = (int)spawn.x;
+    acceptData.spawn_y = (int)spawn.y;
+    SerializeConnectAcceptData(acceptBuffer, acceptData);
+    
+    m_netServer->SendTo(acceptBuffer, from);
+
+    TraceLog(LOG_INFO, "Connection accepted (ID: %d)", client_id);
+}
+
+void Server::HandleDisconnect(uint32_t client_id)
+{
+    auto it = m_clients.find(client_id);
+    if (it != m_clients.end())
+    {
+        TraceLog(LOG_INFO, "Client disconnected (ID: %d)", client_id);
+        m_clients.erase(it);
+    }
+}
+
+void Server::HandleUpdateStateMessage(NetBuffer& buffer, uint32_t client_id)
+{
+    auto it = m_clients.find(client_id);
+    if (it == m_clients.end())
+        return;
+
+    UpdateStateMessage msg = DeserializeUpdateStateMessage(buffer);
+    
+    // Update client state
+    it->second.state.x = msg.x;
+    it->second.state.y = msg.y;
+    it->second.state.missile_count = msg.missile_count;
+    memset(it->second.state.missiles, 0, sizeof(it->second.state.missiles));
+    memcpy(it->second.state.missiles, msg.missiles, msg.missile_count * sizeof(Missile));
+    it->second.last_heard_tick = m_currentTick;
+}
+
+void Server::HandleReceivedMessage(NetBuffer& buffer, const sockaddr_in& from)
+{
+    if (!buffer.CanRead(1))
+        return;
+
+    uint8_t msgType = buffer.ReadUInt8();
+
+    switch (msgType)
+    {
+    case MSG_CONNECT_REQUEST:
+        HandleConnectRequest(from);
+        break;
+
+    case MSG_DISCONNECT:
+    {
+        uint32_t client_id = GetClientIdByAddress(from);
+        if (client_id != 0)
+            HandleDisconnect(client_id);
+        break;
+    }
+
+    case MSG_UPDATE_STATE:
+    {
+        uint32_t client_id = GetClientIdByAddress(from);
+        if (client_id != 0)
+        {
+            HandleUpdateStateMessage(buffer, client_id);
+        }
+        break;
+    }
+
+    case MSG_HEARTBEAT:
+    {
+        uint32_t client_id = GetClientIdByAddress(from);
+        if (client_id != 0)
+        {
+            auto it = m_clients.find(client_id);
+            if (it != m_clients.end())
+                it->second.last_heard_tick = m_currentTick;
+        }
+        break;
+    }
+    }
+}
+
+void Server::CheckClientTimeouts(void)
+{
+    std::vector<uint32_t> toRemove;
+
+    for (auto& [id, client] : m_clients)
+    {
+        if (m_currentTick - client.last_heard_tick > CLIENT_TIMEOUT_TICKS)
+        {
+            TraceLog(LOG_INFO, "Client timed out (ID: %d)", id);
+            toRemove.push_back(id);
         }
     }
 
-    assert(client != NULL);
-
-    client->client_handle = client_handle; // Store the nbnet connection ID
-
-    // Fill the client state with initial spawning data
-    client->state.client_id = client_handle;
-    client->state.x = 200;
-    client->state.y = 400;
-    client->state.missile_count = 0;
-    memset(client->state.missiles, 0, MAX_MISSILES_CLIENT);
-
-    m_clientCount++;
-
-    return 0;
-}
-
-Client* Server::FindClientById(uint32_t client_id)
-{
-    for (int i = 0; i < MAX_CLIENTS; i++)
+    for (uint32_t id : toRemove)
     {
-        if (m_clients[i] && m_clients[i]->state.client_id == client_id)
-            return m_clients[i];
+        m_clients.erase(id);
     }
-
-    return NULL;
-}
-
-void Server::DestroyClient(Client* client)
-{
-    for (int i = 0; i < MAX_CLIENTS; i++)
-    {
-        if (m_clients[i] && m_clients[i]->state.client_id == client->state.client_id)
-        {
-            m_clients[i] = NULL;
-
-            return;
-        }
-    }
-
-    free(client);
-}
-
-void Server::HandleClientDisconnection()
-{
-    NBN_ConnectionHandle client_handle = NBN_GameServer_GetDisconnectedClient(); // Get the disconnected client
-
-    TraceLog(LOG_INFO, "Client has disconnected (id: %d)", client_handle);
-
-    Client* client = FindClientById(client_handle);
-
-    assert(client);
-
-    DestroyClient(client);
-
-    m_clientCount--;
-}
-
-void Server::HandleUpdateStateMessage(UpdateStateMessage* msg, Client* sender)
-{
-    // Update the state of the client with the data from the received UpdateStateMessage message
-    sender->state.x = msg->x;
-    sender->state.y = msg->y;
-    sender->state.missile_count = msg->missile_count;
-    memset(sender->state.missiles, 0, sizeof(sender->state.missiles));
-    memcpy(sender->state.missiles, msg->missiles, sender->state.missile_count * sizeof(Missile));
-
-    UpdateStateMessage_Destroy(msg);
-}
-
-void Server::HandleReceivedMessage(void)
-{
-    // Fetch info about the last received message
-    NBN_MessageInfo msg_info = NBN_GameServer_GetMessageInfo();
-
-    // Find the client that sent the message
-    Client* sender = FindClientById(msg_info.sender);
-
-    assert(sender != NULL);
-
-    switch (msg_info.type)
-    {
-    case UPDATE_STATE_MESSAGE:
-        // The server received a client state update
-        HandleUpdateStateMessage((UpdateStateMessage*)msg_info.data, sender);
-        break;
-    }
-}
-
-int Server::HandleGameServerEvent(int ev)
-{
-    switch (ev)
-    {
-    case NBN_NEW_CONNECTION:
-        // A new client has requested a connection
-        if (HandleNewConnection() < 0)
-            return -1;
-        break;
-
-    case NBN_CLIENT_DISCONNECTED:
-        // A previously connected client has disconnected
-        HandleClientDisconnection();
-        break;
-
-    case NBN_CLIENT_MESSAGE_RECEIVED:
-        // A message from a client has been received
-        HandleReceivedMessage();
-        break;
-    }
-
-    return 0;
 }
 
 void Server::SpawnMob(void)
 {
-    // Find an inactive slot for the new mob
     for (unsigned int i = 0; i < MAX_MOBS; i++)
     {
         if (!m_mobs[i].active)
         {
             m_mobs[i].mob_id = m_nextMobId++;
-            m_mobs[i].x = (float)GAME_WIDTH; // Spawn on the right side
-            m_mobs[i].y = (float)(rand() % (GAME_HEIGHT - MOB_HEIGHT)); // Random Y position
+            m_mobs[i].x = (float)GAME_WIDTH;
+            m_mobs[i].y = (float)(rand() % (GAME_HEIGHT - MOB_HEIGHT));
             m_mobs[i].active = true;
             m_mobCount++;
 
@@ -231,7 +223,6 @@ void Server::SpawnMob(void)
 
 void Server::UpdateMobs(void)
 {
-    // Spawn new mobs periodically
     m_mobSpawnTimer++;
     if (m_mobSpawnTimer >= MOB_SPAWN_INTERVAL && m_mobCount < MAX_MOBS)
     {
@@ -239,14 +230,12 @@ void Server::UpdateMobs(void)
         m_mobSpawnTimer = 0;
     }
 
-    // Update mob positions (move left)
     for (unsigned int i = 0; i < MAX_MOBS; i++)
     {
         if (m_mobs[i].active)
         {
             m_mobs[i].x -= MOB_SPEED;
 
-            // Deactivate mob if it goes off screen
             if (m_mobs[i].x < -MOB_WIDTH)
             {
                 m_mobs[i].active = false;
@@ -259,19 +248,15 @@ void Server::UpdateMobs(void)
 
 void Server::CheckMissileCollisions(void)
 {
-    // Check collisions between all client missiles and mobs
-    for (int c = 0; c < MAX_CLIENTS; c++)
+    for (auto& [id, client] : m_clients)
     {
-        Client* client = m_clients[c];
-        if (client == NULL) continue;
-
-        for (unsigned int m = 0; m < client->state.missile_count; m++)
+        for (unsigned int m = 0; m < client.state.missile_count; m++)
         {
-            Missile& missile = client->state.missiles[m];
+            Missile& missile = client.state.missiles[m];
             Rectangle missileRect = {
                 missile.pos.x,
                 missile.pos.y,
-                missile.rect.width * 2.0f, // Scale matches client rendering
+                missile.rect.width * 2.0f,
                 missile.rect.height * 2.0f
             };
 
@@ -286,16 +271,14 @@ void Server::CheckMissileCollisions(void)
                         (float)MOB_HEIGHT
                     };
 
-                    // Simple AABB collision detection
                     if (missileRect.x < mobRect.x + mobRect.width &&
                         missileRect.x + missileRect.width > mobRect.x &&
                         missileRect.y < mobRect.y + mobRect.height &&
                         missileRect.y + missileRect.height > mobRect.y)
                     {
-                        // Collision detected - destroy the mob
                         m_mobs[i].active = false;
                         m_mobCount--;
-                        TraceLog(LOG_INFO, "Mob (ID: %d) destroyed by client %d", m_mobs[i].mob_id, client->state.client_id);
+                        TraceLog(LOG_INFO, "Mob (ID: %d) destroyed by client %d", m_mobs[i].mob_id, client.client_id);
                     }
                 }
             }
@@ -303,68 +286,45 @@ void Server::CheckMissileCollisions(void)
     }
 }
 
-// Broadcasts the latest game state to all connected clients
 int Server::BroadcastGameState(void)
 {
-    ClientState client_states[MAX_CLIENTS];
-    unsigned int client_index = 0;
+    if (m_clients.empty())
+        return 0;
 
-    // Loop over the clients and build an array of ClientState
-    for (int i = 0; i < MAX_CLIENTS; i++)
+    // Build game state message
+    GameStateMessage gameState;
+    gameState.client_count = 0;
+
+    for (auto& [id, client] : m_clients)
     {
-        Client* client = m_clients[i];
-
-        if (client == NULL) continue;
-
-        client_states[client_index].client_id = client->state.client_id;
-        client_states[client_index].x = client->state.x;
-        client_states[client_index].y = client->state.y;
-        client_states[client_index].missile_count = client->state.missile_count;
-
-        memset(client_states[client_index].missiles, 0, sizeof(client_states[client_index].missiles));
-        memcpy(client_states[client_index].missiles, client->state.missiles, client_states[client_index].missile_count * sizeof(Missile));
-
-        client_index++;
-    }
-
-    assert(client_index == m_clientCount);
-
-    // Build mob states array
-    MobState mob_states[MAX_MOBS];
-    unsigned int mob_index = 0;
-    for (unsigned int i = 0; i < MAX_MOBS; i++)
-    {
-        if (m_mobs[i].active)
+        if (gameState.client_count < MAX_CLIENTS)
         {
-            mob_states[mob_index].mob_id = m_mobs[i].mob_id;
-            mob_states[mob_index].x = m_mobs[i].x;
-            mob_states[mob_index].y = m_mobs[i].y;
-            mob_states[mob_index].active = true;
-            mob_index++;
+            gameState.client_states[gameState.client_count] = client.state;
+            gameState.client_count++;
         }
     }
 
-    // Broadcast the game state to all clients
-    for (int i = 0; i < MAX_CLIENTS; i++)
+    // Build mob states
+    gameState.mob_count = 0;
+    for (unsigned int i = 0; i < MAX_MOBS; i++)
     {
-        Client* client = m_clients[i];
+        if (m_mobs[i].active && gameState.mob_count < MAX_MOBS)
+        {
+            gameState.mobs[gameState.mob_count].mob_id = m_mobs[i].mob_id;
+            gameState.mobs[gameState.mob_count].x = m_mobs[i].x;
+            gameState.mobs[gameState.mob_count].y = m_mobs[i].y;
+            gameState.mobs[gameState.mob_count].active = true;
+            gameState.mob_count++;
+        }
+    }
 
-        if (client == NULL) continue;
-
-        GameStateMessage* msg = GameStateMessage_Create();
-
-        // Fill message data
-        msg->client_count = m_clientCount;
-        memcpy(msg->client_states, client_states, sizeof(ClientState) * m_clientCount);
-
-        // Fill mob data
-        msg->mob_count = mob_index;
-        memcpy(msg->mobs, mob_states, sizeof(MobState) * mob_index);
-
-        // Unreliably send the message to all connected clients
-        NBN_GameServer_SendUnreliableMessageTo(client->client_handle, GAME_STATE_MESSAGE, msg);
-
-        // TraceLog(LOG_DEBUG, "Sent game state to client %d (%d, %d)", client->client_id, client_count, client_index);
+    // Send to all clients
+    for (auto& [id, client] : m_clients)
+    {
+        NetBuffer buffer;
+        buffer.WriteUInt8(MSG_GAME_STATE);
+        SerializeGameStateMessage(buffer, gameState);
+        m_netServer->SendTo(buffer, client.address);
     }
 
     return 0;
@@ -372,23 +332,20 @@ int Server::BroadcastGameState(void)
 
 void Server::Run(void)
 {
+    NetBuffer recvBuffer;
+    sockaddr_in from;
+
     while (running)
     {
-        int ev;
-
-        // Poll for server events
-        while ((ev = NBN_GameServer_Poll()) != NBN_NO_EVENT)
+        // Receive and process messages
+        while (m_netServer->Receive(recvBuffer, from) > 0)
         {
-            if (ev < 0)
-            {
-                TraceLog(LOG_ERROR, "An occured while polling network events. Exit");
-
-                break;
-            }
-
-            if (HandleGameServerEvent(ev) < 0)
-                break;
+            HandleReceivedMessage(recvBuffer, from);
+            recvBuffer.Clear();
         }
+
+        // Check for client timeouts
+        CheckClientTimeouts();
 
         // Update mobs
         UpdateMobs();
@@ -396,33 +353,21 @@ void Server::Run(void)
         // Check missile-mob collisions
         CheckMissileCollisions();
 
-        // Broadcast latest game state
+        // Broadcast game state
         if (BroadcastGameState() < 0)
         {
-            TraceLog(LOG_ERROR, "An occured while broadcasting game states. Exit");
-
+            TraceLog(LOG_ERROR, "Error broadcasting game states. Exit");
             break;
         }
 
-        // Pack all enqueued messages as packets and send them
-        if (NBN_GameServer_SendPackets() < 0)
-        {
-            TraceLog(LOG_ERROR, "An occured while flushing the send queue. Exit");
+        m_currentTick++;
 
-            break;
-        }
-
-        NBN_GameServerStats stats = NBN_GameServer_GetStats();
-
-        TraceLog(LOG_TRACE, "Upload: %f Bps | Download: %f Bps", stats.upload_bandwidth, stats.download_bandwidth);
-
-        // Cap the simulation rate to TICK_RATE ticks per second (just like for the client)
+        // Cap simulation rate
 #if defined(_WIN32) || defined(_WIN64)
-        Sleep(tick_dt * 1000);
+        Sleep((DWORD)(tick_dt * 1000));
 #else
-        long nanos = tick_dt * 1e9;
+        long nanos = (long)(tick_dt * 1e9);
         struct timespec t = { .tv_sec = nanos / 999999999, .tv_nsec = nanos % 999999999 };
-
         nanosleep(&t, &t);
 #endif
     }
@@ -430,7 +375,6 @@ void Server::Run(void)
 
 void Server::Init(int argc, char **argv)
 {
-    // Read command line arguments
     if (ReadCommandLine(argc, argv))
     {
         printf("Usage: r-type_server [--packet_loss <value>] [--packet_duplication <value>] [--ping <value>]"
@@ -438,43 +382,24 @@ void Server::Init(int argc, char **argv)
         return;
     }
 
-    // Even though we do not display anything we still use raylib logging capacibilities
     SetTraceLogLevel(LOG_DEBUG);
 
-    NBN_UDP_Register(); // Register the UDP driver
-
-    // Start the server with a protocol name and a port
-    if (NBN_GameServer_StartEx(PROTOCOL_NAME, PORT) < 0)
+    m_netServer = std::make_unique<NetServer>(PORT);
+    if (!m_netServer->Start())
     {
-        TraceLog(LOG_ERROR, "Game server failed to start. Exit");
-
+        TraceLog(LOG_ERROR, "Failed to start server on port %d", PORT);
+        running = false;
         return;
     }
 
-    // Register messages, have to be done after NBN_GameServer_StartEx
-    NBN_GameServer_RegisterMessage(
-        UPDATE_STATE_MESSAGE,
-        (NBN_MessageBuilder)UpdateStateMessage_Create,
-        (NBN_MessageDestructor)UpdateStateMessage_Destroy,
-        (NBN_MessageSerializer)UpdateStateMessage_Serialize);
-    NBN_GameServer_RegisterMessage(
-        GAME_STATE_MESSAGE,
-        (NBN_MessageBuilder)GameStateMessage_Create,
-        (NBN_MessageDestructor)GameStateMessage_Destroy,
-        (NBN_MessageSerializer)GameStateMessage_Serialize);
-
-    // Network conditions simulated variables (read from the command line, default is always 0)
-    NBN_GameServer_SetPing(GetOptions().ping);
-    NBN_GameServer_SetJitter(GetOptions().jitter);
-    NBN_GameServer_SetPacketLoss(GetOptions().packet_loss);
-    NBN_GameServer_SetPacketDuplication(GetOptions().packet_duplication);
+    TraceLog(LOG_INFO, "Server started on port %d", PORT);
 }
 
 int main(int argc, char* argv[])
 {
-    Server server;
+    std::unique_ptr<Server> server = std::make_unique<Server>();
 
-    server.Init(argc, argv);
-    server.Run();
+    server->Init(argc, argv);
+    server->Run();
     return 0;
 }

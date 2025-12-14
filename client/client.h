@@ -4,7 +4,6 @@
 #include <array>
 #include <memory>
 #include <unordered_map>
-#include <sol/sol.hpp>
 
 #include "shared.h"
 
@@ -37,12 +36,16 @@ private:
 	// Mob storage (received from server)
 	std::vector<MobState> m_mobs;
 
+	// Networking
+	std::unique_ptr<NetClient> m_netClient;
 	bool m_clientInitialized;
 	bool m_connected;               // Connected to the server
 	bool m_disconnected;            // Got disconnected from the server
 	bool m_spawned;                 // Has spawned
 	int m_serverCloseCode;          // The server code used when closing the connection
 	uint32_t m_localClientId;       // Local client ID from server
+	unsigned int m_heartbeatTimer;  // Timer for sending heartbeats
+	
 	GameScreen m_currentScreen;
 	std::array<int, MAX_CLIENTS> m_updatedIds;
 	std::array<Rectangle, 5> m_missileAnimationRectangles;
@@ -58,7 +61,6 @@ private:
 	bool m_displayHUD;
 	Texture2D m_player;
 	Texture2D m_background;
-
 	Texture2D m_mob;
 	Rectangle m_mobBox;
 
@@ -83,13 +85,14 @@ public:
 	void DestroyClient(uint32_t client_id);
 	void DestroyDisconnectedClients(void);
 
-	void HandleConnection(void);
-	void HandleDisconnection(void);
-	void HandleGameStateMessage(GameStateMessage* msg);
-	void HandleReceivedMessage(void);
-	void HandleGameClientEvent(int ev);
+	void HandleConnectAccept(NetBuffer& buffer);
+	void HandleConnectReject(NetBuffer& buffer);
+	void HandleGameStateMessage(NetBuffer& buffer);
+	void HandleReceivedMessages(void);
 
+	int SendConnectRequest(void);
 	int SendPositionUpdate(void);
+	void SendHeartbeat(void);
 
 	int UpdateGameplay(void);
 	void UpdateClient(ClientState state);

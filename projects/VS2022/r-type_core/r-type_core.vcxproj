@@ -22,6 +22,7 @@
     <ClInclude Include="..\..\..\core\framework.h" />
     <ClInclude Include="..\..\..\core\message.h" />
     <ClInclude Include="..\..\..\core\nbnet.h" />
+    <ClInclude Include="..\..\..\core\netlib.hpp" />
     <ClInclude Include="..\..\..\core\network.h" />
     <ClInclude Include="..\..\..\core\shared.h" />
     <ClInclude Include="..\..\..\core\udp.h" />

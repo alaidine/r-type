@@ -3,19 +3,18 @@
 #include <vector>
 #include <array>
 #include <memory>
-#include <sol/sol.hpp>
+#include <unordered_map>
 
 #include "shared.h"
 
 // A simple structure to represent connected clients
-typedef struct
+struct ConnectedClient
 {
-	// Underlying nbnet connection handle, used to send messages to that particular client
-	NBN_ConnectionHandle client_handle;
-
-	// Client state
+	uint32_t client_id;
+	sockaddr_in address;
 	ClientState state;
-} Client;
+	unsigned int last_heard_tick; // For timeout detection
+};
 
 // Mob structure for server-side management
 typedef struct
@@ -29,8 +28,10 @@ typedef struct
 class Server
 {
 private:
-	unsigned int m_clientCount = 0;
-	std::array<Client*, MAX_CLIENTS> m_clients;
+	std::unique_ptr<NetServer> m_netServer;
+	std::unordered_map<uint32_t, ConnectedClient> m_clients;
+	uint32_t m_nextClientId = 1;
+	unsigned int m_currentTick = 0;
 
 	// Mob management
 	std::array<Mob, MAX_MOBS> m_mobs;
@@ -42,6 +43,12 @@ private:
 
 	// Spawn positions
 	std::vector<Vector2> m_spawns;
+
+	// Helper to compare sockaddr_in
+	static bool AddressEquals(const sockaddr_in& a, const sockaddr_in& b);
+	ConnectedClient* FindClientByAddress(const sockaddr_in& addr);
+	uint32_t GetClientIdByAddress(const sockaddr_in& addr);
+
 public:
 	Server();
 	~Server();
@@ -51,14 +58,14 @@ public:
 	void Init(int argc, char **argv);
 	void Run(void);
 
-	void AcceptConnection(unsigned int x, unsigned int y, NBN_ConnectionHandle conn);
-	int HandleNewConnection(void);
-	Client* FindClientById(uint32_t client_id);
-	void DestroyClient(Client* client);
-	void HandleClientDisconnection();
-	void HandleUpdateStateMessage(UpdateStateMessage* msg, Client* sender);
-	void HandleReceivedMessage(void);
-	int HandleGameServerEvent(int ev);
+	// Connection handling
+	void HandleConnectRequest(const sockaddr_in& from);
+	void HandleDisconnect(uint32_t client_id);
+	void HandleUpdateStateMessage(NetBuffer& buffer, uint32_t client_id);
+	void HandleReceivedMessage(NetBuffer& buffer, const sockaddr_in& from);
+	void CheckClientTimeouts(void);
+
+	// Game state broadcasting
 	int BroadcastGameState(void);
 
 	// Mob management
