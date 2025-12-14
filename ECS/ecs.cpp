@@ -18,47 +18,42 @@ int main() {
     InitWindow(screenWidth, screenHeight, "TEST");
     
     MiniBuilder::RegisterComponentBuilder registerTest;
-    registerTest.RegisterComponents<Position, Gravity, Velocity, Sprite, InputController>(_core);
+    registerTest.RegisterComponents<Position, Gravity, Velocity, Sprite, InputController, PlayerSprite, AnimationComponent>(_core);
 
-    auto gravitySystem = _core.RegisterSystem<GravitySystem>();
-    gravitySystem->order = 2;
-    auto renderSystem = _core.RegisterSystem<RendererSystem>();
-    renderSystem->order = 3;
+    // auto gravitySystem = _core.RegisterSystem<GravitySystem>();
+    // gravitySystem->order = 2;
+    // auto renderSystem = _core.RegisterSystem<RendererSystem>();
+    // renderSystem->order = 3;
     auto inputControllerSystem = _core.RegisterSystem<InputControllerSystem>();
     inputControllerSystem->order = 1;
 
-    Signature gravitySignature;
-    Signature RenderSignature;
+    // Signature gravitySignature;
+    // Signature RenderSignature;
     Signature inputControllerSignature;
 
-    MiniBuilder::SystemBuilder gravityBuilder(gravitySignature);
-    gravityBuilder.BuildSignature<GravitySystem, Gravity, Position>(_core);
+    // MiniBuilder::SystemBuilder gravityBuilder(gravitySignature);
+    // gravityBuilder.BuildSignature<GravitySystem, Gravity, Position>(_core);
 
-    MiniBuilder::SystemBuilder rendererBuilder(RenderSignature);
-    rendererBuilder.BuildSignature<RendererSystem, Position, Sprite>(_core);
+    // MiniBuilder::SystemBuilder rendererBuilder(RenderSignature);
+    // rendererBuilder.BuildSignature<RendererSystem, Position, Sprite>(_core);
 
     MiniBuilder::SystemBuilder inputControllerBuilder(inputControllerSignature);
-    inputControllerBuilder.BuildSignature<InputControllerSystem, Position, Velocity, InputController, AnimationComponent>(_core);
+    inputControllerBuilder.BuildSignature<InputControllerSystem, Position, InputController, PlayerSprite>(_core);
 
     Entity player = Prefab::MakePlayer(_core, (float)screenWidth/2, (float)screenHeight/2);
-    Entity missile = Prefab::MakeMilssile(_core);
+    
     srand(time(NULL));
 
-    Entity enemy = Prefab::MakeEnemy(_core, rand() % 800 + 1, rand() % 450+ 1);
-
-    for (int i = 0; i < 5000; i++)
-        
- 
-    SetTargetFPS(60);
+    SetTargetFPS(TARGET_FPS);
 
     while (!WindowShouldClose()) {
         
         BeginDrawing();
         
-        ClearBackground(WHITE);
+        ClearBackground(LIGHTGRAY);
         DrawText("Test text", 10, 10, 20, BLACK);
         
-        _core.UpdateAllSystem();
+        inputControllerSystem->Update();
         
         EndDrawing();
     }

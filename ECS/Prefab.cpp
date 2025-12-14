@@ -1,16 +1,6 @@
 #include "Prefab.hpp"
 
 namespace Prefab {
-    Entity MakePlayer(Core& _core, float posX, float posY) {
-        Entity e = _core.CreateEntity();
-        _core.AddComponent(e, Position{Vector2{posX, posY}});
-        // _core.AddComponent(e, Gravity{9.81});
-        _core.AddComponent(e, Sprite{RED});
-        _core.AddComponent(e, Velocity{4});
-        _core.AddComponent(e, InputController{});
-        
-        return e;
-    }
 
     Entity MakeEnemy(Core& _core, float posX, float posY) {
         Entity e = _core.CreateEntity();
@@ -37,9 +27,23 @@ namespace Prefab {
             0,
             8,
         });
-        _core.AddComponent(e, Sprite{WHITE});
+        _core.AddComponent(e, Sprite{RED});
         _core.AddComponent(e, Position{Vector2{0, 0}});
+        _core.AddComponent(e, Tag{false});
+        return e;
+    }
+
+    Entity MakePlayer(Core& _core, float x, float y) {
+        Entity e = _core.CreateEntity();
+        PlayerSprite sprite;
+        sprite.texture = LoadTexture("resources/sprites/player_r-9c_war-head.png");
+        _core.AddComponent(e, Position{Vector2{x, y}});
         _core.AddComponent(e, InputController{});
+        _core.AddComponent(e, sprite);
+        _core.AddComponent(e, AnimationComponent{
+            Rectangle{0, 30, 32, 22},
+        });
+        _core.AddComponent(e, Tag{true});
         return e;
     }
 }

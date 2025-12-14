@@ -1,6 +1,7 @@
 #pragma once
     #include <cstdint>
     #include <raylib.h>
+    #include <array>
 
 using ComponentType = std::uint8_t;
 
@@ -22,6 +23,10 @@ struct Sprite {
     Color color;
 };
 
+struct PlayerSprite {
+    Texture2D texture;
+};
+
 struct Collider {
     Rectangle rect;
 };
@@ -35,3 +40,7 @@ struct AnimationComponent {
 };
 
 struct InputController{};
+
+struct Tag{
+    bool isPlayer;
+};
