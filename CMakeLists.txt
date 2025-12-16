@@ -1,62 +1,48 @@
-cmake_minimum_required(VERSION 3.24...4.1)
-project(r-type)
+cmake_minimum_required(VERSION 4.1.0)
 
-# Download CPM.cmake
-file(
-    DOWNLOAD
-    https://github.com/cpm-cmake/CPM.cmake/releases/download/v0.40.2/CPM.cmake
-    ${CMAKE_CURRENT_BINARY_DIR}/cmake/CPM.cmake
-    EXPECTED_HASH SHA256=c8cdc32c03816538ce22781ed72964dc864b2a34a310d3b7104812a5ca2d835d
-)
-include(${CMAKE_CURRENT_BINARY_DIR}/cmake/CPM.cmake)
+project(rt-engine)
 
 set(CMAKE_CXX_STANDARD 20)
 
-# Project targets
-set(CORE_LIB r-type_core)
-set(ECS_LIB r-type_ecs)
-set(CLIENT r-type_client)
-set(SERVER r-type_server)
+add_executable(${PROJECT_NAME}
+    base.cpp
+    base.h
+    benchmark.hpp
+    camera.hpp
+    CommandLineParser.hpp
+    Entrypoints.h
+    keycodes.hpp
+    main.cpp
+    VulkanBuffer.cpp
+    VulkanBuffer.h
+    VulkanDebug.cpp
+    VulkanDebug.h
+    VulkanDevice.cpp
+    VulkanDevice.h
+    VulkanInitializers.hpp
+    VulkanSwapChain.cpp
+    VulkanSwapChain.h
+    VulkanTexture.cpp
+    VulkanTexture.h
+    VulkanTools.h
+    VulkanTools.cpp
+    VulkanUIOverlay.cpp
+    VulkanUIOverlay.h
+    imconfig.h
+    imgui.cpp
+    imgui.h
+    imgui_draw.cpp
+    imgui_demo.cpp
+    imgui_widgets.cpp
+    imgui_internal.h
+    imstb_rectpack.h
+    imstb_textedit.h
+    imstb_truetype.h)
 
-# Dependencies using CPM
-CPMAddPackage(
-    NAME raylib
-    URL https://github.com/raysan5/raylib/archive/refs/tags/5.0.zip
-    VERSION 5.0
-    DOWNLOAD_ONLY YES
-)
-if(raylib_ADDED)
-    # Configure raylib build options
-    set(BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
-    set(BUILD_GAMES OFF CACHE BOOL "" FORCE)
-    add_subdirectory(${raylib_SOURCE_DIR} ${raylib_BINARY_DIR})
-endif()
+find_package(Vulkan REQUIRED)
 
-CPMAddPackage(
-    NAME sol2
-    URL https://github.com/ThePhD/sol2/archive/refs/tags/v3.3.0.zip
-    VERSION 3.3.0
-)
+add_subdirectory(glfw)
+add_subdirectory(glm)
+add_subdirectory(KTX-Software/lib ktx)
 
-CPMAddPackage(
-    NAME box2d
-    URL https://github.com/erincatto/box2d/archive/refs/tags/v3.1.1.zip
-    VERSION 3.1.1
-)
-
-# Lua setup using local libraries
-set(LUA_INCLUDE_DIR ${CMAKE_SOURCE_DIR}/lua/include)
-set(LUA_LIBRARY_DIR ${CMAKE_SOURCE_DIR}/lua)
-
-# Find lua54 library
-if(WIN32)
-    set(LUA_LIBRARY ${LUA_LIBRARY_DIR}/lua54.lib)
-else()
-    set(LUA_LIBRARY ${LUA_LIBRARY_DIR}/liblua54.a)
-endif()
-
-# Add subdirectories
-add_subdirectory(ECS)
-add_subdirectory(core)
-add_subdirectory(client)
-add_subdirectory(server)
+target_link_libraries(${PROJECT_NAME} PRIVATE Vulkan::Vulkan glfw glm::glm ktx)

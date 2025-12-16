@@ -1,8 +1,0 @@
-@echo off
-if exist "build\" (
-    echo Build directory exists... Run cmake --build build to build the project.
-) else (
-    echo Build directory not found, configuring and building project...
-    cmake -B build/ -S . -DFETCHCONTENT_SOURCE_DIR_RAYLIB=../raylib -DFETCHCONTENT_SOURCE_DIR_SOL2=../sol2 -DFETCHCONTENT_SOURCE_DIR_BOX2D=../box2d -DCMAKE_POLICY_VERSION_MINIMUM='3.5'
-    cmake --build build
-)

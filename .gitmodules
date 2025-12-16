@@ -1,0 +1,9 @@
+[submodule "glfw"]
+	path = glfw
+	url = git@github.com:glfw/glfw.git
+[submodule "glm"]
+	path = glm
+	url = git@github.com:g-truc/glm.git
+[submodule "KTX-Software"]
+	path = KTX-Software
+	url = git@github.com:KhronosGroup/KTX-Software.git
