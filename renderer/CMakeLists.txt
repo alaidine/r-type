@@ -1,0 +1,38 @@
+add_library(renderer
+    base.cpp
+    base.h
+    benchmark.hpp
+    camera.hpp
+    CommandLineParser.hpp
+    Entrypoint.h
+    keycodes.hpp
+    texture_example.cpp
+    VulkanBuffer.cpp
+    VulkanBuffer.h
+    VulkanDebug.cpp
+    VulkanDebug.h
+    VulkanDevice.cpp
+    VulkanDevice.h
+    VulkanInitializers.hpp
+    VulkanSwapChain.cpp
+    VulkanSwapChain.h
+    VulkanTexture.cpp
+    VulkanTexture.h
+    VulkanTools.h
+    VulkanTools.cpp
+    VulkanUIOverlay.cpp
+    VulkanUIOverlay.h
+    rt-engine.h
+    rt-engine.cpp
+    imconfig.h
+    imgui.cpp
+    imgui.h
+    imgui_draw.cpp
+    imgui_demo.cpp
+    imgui_widgets.cpp
+    imgui_internal.h
+    imstb_rectpack.h
+    imstb_textedit.h
+    imstb_truetype.h)
+
+target_link_libraries(renderer PRIVATE Vulkan::Vulkan glfw glm::glm ktx)

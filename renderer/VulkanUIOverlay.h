@@ -1,11 +1,3 @@
-/*
-* UI overlay class using ImGui
-*
-* Copyright (C) 2017-2025 by Sascha Willems - www.saschawillems.de
-*
-* This code is licensed under the MIT license (MIT) (http://opensource.org/licenses/MIT)
-*/
-
 #pragma once
 
 #include <stdio.h>
@@ -24,10 +16,6 @@
 #include "VulkanDevice.h"
 
 #include "imgui.h"
-
-#if defined(__APPLE__)
-#include <TargetConditionals.h>
-#endif
 
 namespace vks
 {

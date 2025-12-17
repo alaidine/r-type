@@ -1,18 +1,8 @@
-/*
-* Vulkan Example - Texture loading (and display) example (including mip maps)
-* 
-* This sample shows how to upload a 2D texture to the device and how to display it. In Vulkan this is done using images, views and samplers.
-*
-* Copyright (C) 2016-2025 by Sascha Willems - www.saschawillems.de
-*
-* This code is licensed under the MIT license (MIT) (http://opensource.org/licenses/MIT)
-*/
-
 #include "base.h"
 #include <ktx.h>
 #include <ktxvulkan.h>
 
-// Vertex layout for this example
+// Vertex layout
 struct Vertex {
 	float pos[3];
 	float uv[2];
@@ -23,7 +13,6 @@ class VulkanExample : public VulkanExampleBase
 {
 public:
 	// Contains all Vulkan objects that are required to store and use a texture
-	// Note that this repository contains a texture class (VulkanTexture.hpp) that encapsulates texture loading functionality in a class that is used in subsequent demos
 	struct Texture {
 		VkSampler sampler{ VK_NULL_HANDLE };
 		VkImage image{ VK_NULL_HANDLE };
@@ -106,7 +95,7 @@ public:
 	void loadTexture()
 	{
 		// We use the Khronos texture format (https://www.khronos.org/opengles/sdk/tools/KTX/file_format_spec/)
-		std::string filename = getAssetPath() + "textures/metalplate01_rgba.ktx";
+		std::string filename = getAssetPath() + "textures/space_background.ktx";
 		// Texture data contains 4 channels (RGBA) with unnormalized 8-bit values, this is the most commonly supported format
 		VkFormat format = VK_FORMAT_R8G8B8A8_UNORM;
 
@@ -660,4 +649,4 @@ public:
 	}
 };
 
-VULKAN_EXAMPLE_MAIN()
+// VULKAN_EXAMPLE_MAIN()
