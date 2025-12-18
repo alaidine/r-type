@@ -11,16 +11,17 @@
 #include "IMovementStrategy.hpp"
 
 class CircularStrategy : public IMovementStrategy {
-    public:
-        CircularStrategy(float xSpeed, float radius, float angularSpeed, float startX, float centerY);
-        Position update(const Position &currentPosition, float totalTime) override;
+public:
+  CircularStrategy(float xSpeed, float radius, float angularSpeed, float startX,
+                   float centerY);
+  Position update(const Position &currentPosition, float totalTime) override;
 
-    private:
-        float _xSpeed;
-        float _radius;
-        float _angularSpeed;
-        float _startX;
-        float _centerY;
+private:
+  float _xSpeed;
+  float _radius;
+  float _angularSpeed;
+  float _startX;
+  float _centerY;
 };
 
 #endif // CIRCULARSTRATEGY_HPP_

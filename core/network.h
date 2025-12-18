@@ -1,7 +1,7 @@
 #pragma once
 
-#include "raylib.h"
 #include "framework.h"
+#include "raylib.h"
 
 #define NBN_LogInfo(...) TraceLog(LOG_INFO, __VA_ARGS__)
 #define NBN_LogError(...) TraceLog(LOG_ERROR, __VA_ARGS__)
@@ -12,20 +12,19 @@
 #include "nbnet.h"
 #include "udp.h"
 
-enum NetworkMode
-{
-	SERVER,
-	CLIENT,
+enum NetworkMode {
+  SERVER,
+  CLIENT,
 };
 
-class Network
-{
+class Network {
 private:
-	NetworkMode m_mode;
-public:
-	Network(NetworkMode mode);
-	~Network(void);
+  NetworkMode m_mode;
 
-	void Init();
-	void Init(int argc, char** argv);
+public:
+  Network(NetworkMode mode);
+  ~Network(void);
+
+  void Init();
+  void Init(int argc, char **argv);
 };

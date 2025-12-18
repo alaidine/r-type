@@ -1,47 +1,48 @@
 #pragma once
-    #include "Entity.hpp"
-    #include "../Signature.hpp"
-    #include <queue>
-    #include <array>
-    #include <cassert>
+#include "../Signature.hpp"
+#include "Entity.hpp"
+#include <array>
+#include <cassert>
+#include <queue>
 
 class EntityManager {
-    private:
-        std::queue<Entity> _entityAvailable{};
-        std::array<Signature, MAX_ENTITIES> _signatures{};
-        uint32_t _livingEntity{};
-    public:
-        EntityManager() {
-            for (Entity entity = 0; entity < MAX_ENTITIES; entity++)
-                _entityAvailable.push(entity);
-        }
+private:
+  std::queue<Entity> _entityAvailable{};
+  std::array<Signature, MAX_ENTITIES> _signatures{};
+  uint32_t _livingEntity{};
 
-        Entity CreateEntity() {
-            assert(_livingEntity < MAX_ENTITIES && "Too many entities in existence.");
+public:
+  EntityManager() {
+    for (Entity entity = 0; entity < MAX_ENTITIES; entity++)
+      _entityAvailable.push(entity);
+  }
 
-            Entity id = _entityAvailable.front();
-            _entityAvailable.pop();
-            _livingEntity++;
-            return id;
-        }
+  Entity CreateEntity() {
+    assert(_livingEntity < MAX_ENTITIES && "Too many entities in existence.");
 
-        void DestroyEntity(Entity entity) {
-            assert(entity < MAX_ENTITIES && "Entity out of range.");
+    Entity id = _entityAvailable.front();
+    _entityAvailable.pop();
+    _livingEntity++;
+    return id;
+  }
 
-            _signatures[entity].reset();
-            _entityAvailable.push(entity);
-            _livingEntity--;
-        }
+  void DestroyEntity(Entity entity) {
+    assert(entity < MAX_ENTITIES && "Entity out of range.");
 
-        void SetSignature(Entity entity ,Signature signature) {
-            assert(entity < MAX_ENTITIES && "Entity out of range.");
+    _signatures[entity].reset();
+    _entityAvailable.push(entity);
+    _livingEntity--;
+  }
 
-            _signatures[entity] = signature;
-        }
+  void SetSignature(Entity entity, Signature signature) {
+    assert(entity < MAX_ENTITIES && "Entity out of range.");
 
-        Signature GetSignature(Entity entity) {
-            assert(entity < MAX_ENTITIES && "Entity out of range.");
+    _signatures[entity] = signature;
+  }
 
-            return _signatures[entity];
-        }
+  Signature GetSignature(Entity entity) {
+    assert(entity < MAX_ENTITIES && "Entity out of range.");
+
+    return _signatures[entity];
+  }
 };

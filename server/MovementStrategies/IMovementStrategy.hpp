@@ -9,14 +9,14 @@
 #define IMOVEMENTSTRATEGY_HPP_
 
 struct Position {
-    float x;
-    float y;
+  float x;
+  float y;
 };
 
 class IMovementStrategy {
-    public:
-        virtual ~IMovementStrategy() = default;
-        virtual Position update(const Position &currentPosition, float totalTime) = 0;
+public:
+  virtual ~IMovementStrategy() = default;
+  virtual Position update(const Position &currentPosition, float totalTime) = 0;
 };
 
 #endif // IMOVEMENTSTRATEGY_HPP_

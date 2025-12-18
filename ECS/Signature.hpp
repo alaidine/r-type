@@ -1,5 +1,5 @@
 #pragma once
-    #include <bitset>
-    #include "Component/Component.hpp"
+#include "Component/Component.hpp"
+#include <bitset>
 
 using Signature = std::bitset<MAX_COMPONENTS>;

@@ -1,66 +1,72 @@
+#include "Builder/Builder.hpp"
 #include "Core.hpp"
+#include "Prefab.hpp"
 #include "System/GravitySystem.hpp"
-#include "System/RendererSystem.hpp"
 #include "System/InputControllerSystem.hpp"
 #include "System/MissileSystem.hpp"
-#include "Builder/Builder.hpp"
-#include "Prefab.hpp"
+#include "System/RendererSystem.hpp"
 #include <stdlib.h>
 #include <time.h>
 
 Core _core;
 
 int foo() {
-    _core.Init();
+  _core.Init();
 
-    const int screenWidth = 800;
-    const int screenHeight = 450;
+  const int screenWidth = 800;
+  const int screenHeight = 450;
 
-    InitWindow(screenWidth, screenHeight, "TEST");
-    
-    MiniBuilder::RegisterComponentBuilder registerTest;
-    registerTest.RegisterComponents<Position, Gravity, Velocity, Sprite, InputController, PlayerSprite, AnimationComponent, Tag, MissileTag, playerCooldown>(_core);
+  InitWindow(screenWidth, screenHeight, "TEST");
 
- 
-    auto renderSystem = _core.RegisterSystem<RendererSystem>();
-    renderSystem->order = 3;
-    auto inputControllerSystem = _core.RegisterSystem<InputControllerSystem>();
-    inputControllerSystem->order = 1;
-    auto missileSystem = _core.RegisterSystem<MissileSystem>();
-    missileSystem->order = 2;
+  MiniBuilder::RegisterComponentBuilder registerTest;
+  registerTest.RegisterComponents<
+      Position, Gravity, Velocity, Sprite, InputController, PlayerSprite,
+      AnimationComponent, Tag, MissileTag, playerCooldown>(_core);
 
-    // Signature gravitySignature;
-    Signature RenderSignature;
-    Signature inputControllerSignature;
-    Signature missileSystemSignature;
+  auto renderSystem = _core.RegisterSystem<RendererSystem>();
+  renderSystem->order = 3;
+  auto inputControllerSystem = _core.RegisterSystem<InputControllerSystem>();
+  inputControllerSystem->order = 1;
+  auto missileSystem = _core.RegisterSystem<MissileSystem>();
+  missileSystem->order = 2;
 
-    MiniBuilder::SystemBuilder rendererBuilder(RenderSignature);
-    rendererBuilder.BuildSignature<RendererSystem, Position, Sprite, AnimationComponent>(_core);
+  // Signature gravitySignature;
+  Signature RenderSignature;
+  Signature inputControllerSignature;
+  Signature missileSystemSignature;
 
-    MiniBuilder::SystemBuilder inputControllerBuilder(inputControllerSignature);
-    inputControllerBuilder.BuildSignature<InputControllerSystem, Position, InputController, PlayerSprite>(_core);
+  MiniBuilder::SystemBuilder rendererBuilder(RenderSignature);
+  rendererBuilder
+      .BuildSignature<RendererSystem, Position, Sprite, AnimationComponent>(
+          _core);
 
-    MiniBuilder::SystemBuilder missileSystemBuilder(missileSystemSignature);
-    missileSystemBuilder.BuildSignature<MissileSystem ,Position, AnimationComponent, MissileTag>(_core);
+  MiniBuilder::SystemBuilder inputControllerBuilder(inputControllerSignature);
+  inputControllerBuilder.BuildSignature<InputControllerSystem, Position,
+                                        InputController, PlayerSprite>(_core);
 
-    Entity player = Prefab::MakePlayer(_core, (float)screenWidth/2, (float)screenHeight/2);
+  MiniBuilder::SystemBuilder missileSystemBuilder(missileSystemSignature);
+  missileSystemBuilder
+      .BuildSignature<MissileSystem, Position, AnimationComponent, MissileTag>(
+          _core);
 
-    SetTargetFPS(TARGET_FPS);
+  Entity player = Prefab::MakePlayer(_core, (float)screenWidth / 2,
+                                     (float)screenHeight / 2);
 
-    while (!WindowShouldClose()) {
-        
-        BeginDrawing();
-        
-        ClearBackground(LIGHTGRAY);
-        DrawText("Test text", 10, 10, 20, BLACK);
-        
-        _core.UpdateAllSystem();
-        
-        EndDrawing();
-    }
-    
+  SetTargetFPS(TARGET_FPS);
 
-    CloseWindow();
+  while (!WindowShouldClose()) {
 
-    return 0;
+    BeginDrawing();
+
+    ClearBackground(LIGHTGRAY);
+    DrawText("Test text", 10, 10, 20, BLACK);
+
+    _core.UpdateAllSystem();
+
+    EndDrawing();
+  }
+
+  CloseWindow();
+
+  return 0;
 }

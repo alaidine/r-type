@@ -1,15 +1,15 @@
 #pragma once
 
-#define WIN32_LEAN_AND_MEAN             // Exclude rarely-used stuff from Windows headers
+#define WIN32_LEAN_AND_MEAN // Exclude rarely-used stuff from Windows headers
 
 #if defined(_WIN32) || defined(_WIN64)
 
 /*
- * The following defines are meant to avoid conflicts between raylib and windows.h
- * https://github.com/raysan5/raylib/issues/857
+ * The following defines are meant to avoid conflicts between raylib and
+ * windows.h https://github.com/raysan5/raylib/issues/857
  */
 
- // If defined, the following flags inhibit definition of the indicated items
+// If defined, the following flags inhibit definition of the indicated items
 #define NOGDICAPMASKS     // CC_*, LC_*, PC_*, CP_*, TC_*, RC_
 #define NOVIRTUALKEYCODES // VK_*
 #define NOWINMESSAGES     // WM_*, EM_*, LB_*, CB_*
@@ -31,48 +31,48 @@
 #define NOKERNEL          // All KERNEL defines and routines
 #define NOUSER            // All USER defines and routines
 /*#define NONLS             // All NLS defines and routines*/
-#define NOMB              // MB_* and MessageBox()
-#define NOMEMMGR          // GMEM_*, LMEM_*, GHND, LHND, associated routines
-#define NOMETAFILE        // typedef METAFILEPICT
-#define NOMINMAX          // Macros min(a,b) and max(a,b)
-#define NOMSG             // typedef MSG and associated routines
-#define NOOPENFILE        // OpenFile(), OemToAnsi, AnsiToOem, and OF_*
-#define NOSCROLL          // SB_* and scrolling routines
-#define NOSERVICE         // All Service Controller routines, SERVICE_ equates, etc.
-#define NOSOUND           // Sound driver routines
-#define NOTEXTMETRIC      // typedef TEXTMETRIC and associated routines
-#define NOWH              // SetWindowsHook and WH_*
-#define NOWINOFFSETS      // GWL_*, GCL_*, associated routines
-#define NOCOMM            // COMM driver routines
-#define NOKANJI           // Kanji support stuff.
-#define NOHELP            // Help engine interface.
-#define NOPROFILER        // Profiler interface.
-#define NODEFERWINDOWPOS  // DeferWindowPos routines
-#define NOMCX             // Modem Configuration Extensions
+#define NOMB         // MB_* and MessageBox()
+#define NOMEMMGR     // GMEM_*, LMEM_*, GHND, LHND, associated routines
+#define NOMETAFILE   // typedef METAFILEPICT
+#define NOMINMAX     // Macros min(a,b) and max(a,b)
+#define NOMSG        // typedef MSG and associated routines
+#define NOOPENFILE   // OpenFile(), OemToAnsi, AnsiToOem, and OF_*
+#define NOSCROLL     // SB_* and scrolling routines
+#define NOSERVICE    // All Service Controller routines, SERVICE_ equates, etc.
+#define NOSOUND      // Sound driver routines
+#define NOTEXTMETRIC // typedef TEXTMETRIC and associated routines
+#define NOWH         // SetWindowsHook and WH_*
+#define NOWINOFFSETS // GWL_*, GCL_*, associated routines
+#define NOCOMM       // COMM driver routines
+#define NOKANJI      // Kanji support stuff.
+#define NOHELP       // Help engine interface.
+#define NOPROFILER   // Profiler interface.
+#define NODEFERWINDOWPOS // DeferWindowPos routines
+#define NOMCX            // Modem Configuration Extensions
 
 // Type required before windows.h inclusion
-typedef struct tagMSG* LPMSG;
+typedef struct tagMSG *LPMSG;
 
-#include <winsock2.h> // Has to be included before windows.h
 #include <windows.h>
+#include <winsock2.h> // Has to be included before windows.h
 
 #endif // WINDOWS
 
 #if defined(_WIN32) || defined(_WIN64)
 
 #define WIN32_LEAN_AND_MEAN
-#define NOGDI          // Exclude GDI definitions to prevent Rectangle conflicts
-#define NOUSER         // Exclude USER definitions to prevent function name conflicts
+#define NOGDI  // Exclude GDI definitions to prevent Rectangle conflicts
+#define NOUSER // Exclude USER definitions to prevent function name conflicts
 
 #endif
 
-#include <stdio.h>
 #include <signal.h>
+#include <stdio.h>
 
 #if defined(_WIN32) || defined(_WIN64)
-#include <winsock2.h>
+#include <synchapi.h>
 #include <windows.h>
-#include <synchapi.h> 
+#include <winsock2.h>
 #else
 #include <time.h>
 #endif

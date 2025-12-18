@@ -1,117 +1,114 @@
 #pragma once
 
-#include <vector>
 #include <array>
 #include <memory>
 #include <unordered_map>
+#include <vector>
 
-#include "shared.h"
 #include "Parallax/Parallax.hpp"
+#include "shared.h"
 
 // ECS includes
+#include "../ECS/Builder/Builder.hpp"
 #include "../ECS/Core.hpp"
 #include "../ECS/Prefab.hpp"
-#include "../ECS/Builder/Builder.hpp"
 #include "../ECS/System/ClientRendererSystem.hpp"
 
 #define TARGET_FPS 100
 #define MAX_INPUT_CHARS 15
 
-class Client
-{
+class Client {
 private:
-	typedef enum
-	{
-		TITLE = 0,
-		IP_ADDRESS,
-		GAMEPLAY
-	} GameScreen;
+  typedef enum { TITLE = 0, IP_ADDRESS, GAMEPLAY } GameScreen;
 
-	// ECS Core
-	Core m_ecsCore;
-	std::shared_ptr<ClientRendererSystem> m_clientRendererSystem;
-	Entity m_localPlayerEntity;
-	std::unordered_map<uint32_t, Entity> m_clientEntities; // Maps client_id to Entity
-	std::unordered_map<uint32_t, std::vector<Missile>> m_remoteMissiles; // Maps client_id to their missiles
+  // ECS Core
+  Core m_ecsCore;
+  std::shared_ptr<ClientRendererSystem> m_clientRendererSystem;
+  Entity m_localPlayerEntity;
+  std::unordered_map<uint32_t, Entity>
+      m_clientEntities; // Maps client_id to Entity
+  std::unordered_map<uint32_t, std::vector<Missile>>
+      m_remoteMissiles; // Maps client_id to their missiles
 
-	// Mob storage (received from server)
-	std::vector<MobState> m_mobs;
+  // Mob storage (received from server)
+  std::vector<MobState> m_mobs;
 
-	// Wave system info (received from server)
-	float m_countdownTimer;
-	unsigned int m_currentWave;
-	bool m_waveActive;
+  // Wave system info (received from server)
+  float m_countdownTimer;
+  unsigned int m_currentWave;
+  bool m_waveActive;
 
-	// Parallax background
-	Parallax m_parallax;
+  // Parallax background
+  Parallax m_parallax;
 
-	// Networking
-	std::unique_ptr<NetClient> m_netClient;
-	bool m_clientInitialized;
-	bool m_connected;               // Connected to the server
-	bool m_disconnected;            // Got disconnected from the server
-	bool m_spawned;                 // Has spawned
-	int m_serverCloseCode;          // The server code used when closing the connection
-	uint32_t m_localClientId;       // Local client ID from server
-	unsigned int m_heartbeatTimer;  // Timer for sending heartbeats
-	
-	GameScreen m_currentScreen;
-	std::array<int, MAX_CLIENTS> m_updatedIds;
-	std::array<Rectangle, 5> m_missileAnimationRectangles;
-	std::vector<Missile> m_missiles;
-	unsigned int m_clientCount;
-	bool m_fireMissileKeyPressed;
-	double m_tickDt; // Tick delta time (in seconds)
-	double m_acc;
-	char m_serverIp[MAX_INPUT_CHARS + 1]; // NOTE: One extra space required for null terminator char '\0'
-	int m_letterCount;
-	Rectangle m_textBox;
-	int m_framesCounter;
-	bool m_displayHUD;
-	Texture2D m_player;
-	Texture2D m_background;
-	Texture2D m_mob;
-	Rectangle m_mobBox;
+  // Networking
+  std::unique_ptr<NetClient> m_netClient;
+  bool m_clientInitialized;
+  bool m_connected;         // Connected to the server
+  bool m_disconnected;      // Got disconnected from the server
+  bool m_spawned;           // Has spawned
+  int m_serverCloseCode;    // The server code used when closing the connection
+  uint32_t m_localClientId; // Local client ID from server
+  unsigned int m_heartbeatTimer; // Timer for sending heartbeats
 
-	// ECS initialization
-	void InitECS(void);
-	
+  GameScreen m_currentScreen;
+  std::array<int, MAX_CLIENTS> m_updatedIds;
+  std::array<Rectangle, 5> m_missileAnimationRectangles;
+  std::vector<Missile> m_missiles;
+  unsigned int m_clientCount;
+  bool m_fireMissileKeyPressed;
+  double m_tickDt; // Tick delta time (in seconds)
+  double m_acc;
+  char m_serverIp[MAX_INPUT_CHARS + 1]; // NOTE: One extra space required for
+                                        // null terminator char '\0'
+  int m_letterCount;
+  Rectangle m_textBox;
+  int m_framesCounter;
+  bool m_displayHUD;
+  Texture2D m_player;
+  Texture2D m_background;
+  Texture2D m_mob;
+  Rectangle m_mobBox;
+
+  // ECS initialization
+  void InitECS(void);
+
 public:
-	Client();
-	~Client();
+  Client();
+  ~Client();
 
-	void Init(void);
-	void Run(void);
+  void Init(void);
+  void Run(void);
 
-	void Fire(void);
-	void DrawMissiles(void);
-	void DrawMobs(void);
+  void Fire(void);
+  void DrawMissiles(void);
+  void DrawMobs(void);
 
-	void SpawnLocalClient(int x, int y, uint32_t client_id);
-	bool ClientExists(uint32_t client_id);
-	void CreateClient(ClientState state);
-	
-	void DestroyClient(uint32_t client_id);
-	void DestroyDisconnectedClients(void);
+  void SpawnLocalClient(int x, int y, uint32_t client_id);
+  bool ClientExists(uint32_t client_id);
+  void CreateClient(ClientState state);
 
-	void HandleConnectAccept(NetBuffer& buffer);
-	void HandleConnectReject(NetBuffer& buffer);
-	void HandleGameStateMessage(NetBuffer& buffer);
-	void HandleReceivedMessages(void);
+  void DestroyClient(uint32_t client_id);
+  void DestroyDisconnectedClients(void);
 
-	int SendConnectRequest(void);
-	int SendPositionUpdate(void);
-	void SendHeartbeat(void);
+  void HandleConnectAccept(NetBuffer &buffer);
+  void HandleConnectReject(NetBuffer &buffer);
+  void HandleGameStateMessage(NetBuffer &buffer);
+  void HandleReceivedMessages(void);
 
-	int UpdateGameplay(void);
-	void UpdateClient(ClientState state);
-	
-	void UpdateAndDraw(void);
-	void DrawClient(Entity entity);
-	void DrawHUD(void);
-	void DrawWaveInfo(void);
-	void DrawGameplay(void);
-	void DrawBackground(void);
+  int SendConnectRequest(void);
+  int SendPositionUpdate(void);
+  void SendHeartbeat(void);
 
-	void InitClient(char* serverIp);
+  int UpdateGameplay(void);
+  void UpdateClient(ClientState state);
+
+  void UpdateAndDraw(void);
+  void DrawClient(Entity entity);
+  void DrawHUD(void);
+  void DrawWaveInfo(void);
+  void DrawGameplay(void);
+  void DrawBackground(void);
+
+  void InitClient(char *serverIp);
 };
