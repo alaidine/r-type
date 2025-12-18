@@ -2,13 +2,17 @@
 add_executable(${CLIENT}
     client.cpp
     client.h
+    Parallax/Parallax.cpp
 )
 
 # Link with core library (provides all shared dependencies)
 target_link_libraries(${CLIENT} PRIVATE ${CORE_LIB})
 
 # Include current directory for client-specific headers
-target_include_directories(${CLIENT} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+target_include_directories(${CLIENT} PRIVATE 
+    ${CMAKE_CURRENT_SOURCE_DIR}
+    ${CMAKE_CURRENT_SOURCE_DIR}/Parallax
+)
 
 # Set output directory
 set_target_properties(${CLIENT} PROPERTIES

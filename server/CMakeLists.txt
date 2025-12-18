@@ -2,6 +2,13 @@
 add_executable(${SERVER}
     server.cpp
     server.h
+    MovementStrategies/LinearStrategy.cpp
+    MovementStrategies/SinusoidalStrategy.cpp
+    MovementStrategies/ZigZagStrategy.cpp
+    MovementStrategies/CircularStrategy.cpp
+    MovementStrategies/DiveStrategy.cpp
+    MovementStrategies/Figure8Strategy.cpp
+    WaveManager/WaveManager.cpp
 )
 
 # Link with core library (provides all shared dependencies)
@@ -11,6 +18,7 @@ target_link_libraries(${SERVER} PRIVATE ${CORE_LIB})
 target_include_directories(${SERVER} PRIVATE 
     ${CMAKE_CURRENT_SOURCE_DIR}
     ${CMAKE_CURRENT_SOURCE_DIR}/MovementStrategies
+    ${CMAKE_CURRENT_SOURCE_DIR}/WaveManager
 )
 
 # Set output directory

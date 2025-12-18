@@ -44,15 +44,29 @@ CPMAddPackage(
     VERSION 3.1.1
 )
 
-# Lua setup using local libraries
-set(LUA_INCLUDE_DIR ${CMAKE_SOURCE_DIR}/lua/include)
-set(LUA_LIBRARY_DIR ${CMAKE_SOURCE_DIR}/lua)
-
-# Find lua54 library
-if(WIN32)
-    set(LUA_LIBRARY ${LUA_LIBRARY_DIR}/lua54.lib)
+# Lua setup
+if(APPLE)
+    # Use Homebrew Lua on macOS
+    execute_process(
+        COMMAND /opt/homebrew/bin/brew --prefix lua
+        OUTPUT_VARIABLE LUA_PREFIX
+        OUTPUT_STRIP_TRAILING_WHITESPACE
+    )
+    if(LUA_PREFIX)
+        set(LUA_INCLUDE_DIR ${LUA_PREFIX}/include/lua)
+        find_library(LUA_LIBRARY lua PATHS ${LUA_PREFIX}/lib NO_DEFAULT_PATH)
+        message(STATUS "Using Homebrew Lua: ${LUA_LIBRARY}")
+    else()
+        message(WARNING "Lua not found via Homebrew, using local libraries")
+        set(LUA_INCLUDE_DIR ${CMAKE_SOURCE_DIR}/lua/include)
+        set(LUA_LIBRARY ${CMAKE_SOURCE_DIR}/lua/liblua54.a)
+    endif()
+elseif(WIN32)
+    set(LUA_INCLUDE_DIR ${CMAKE_SOURCE_DIR}/lua/include)
+    set(LUA_LIBRARY ${CMAKE_SOURCE_DIR}/lua/lua54.lib)
 else()
-    set(LUA_LIBRARY ${LUA_LIBRARY_DIR}/liblua54.a)
+    set(LUA_INCLUDE_DIR ${CMAKE_SOURCE_DIR}/lua/include)
+    set(LUA_LIBRARY ${CMAKE_SOURCE_DIR}/lua/liblua54.a)
 endif()
 
 # Add subdirectories

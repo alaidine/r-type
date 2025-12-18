@@ -6,6 +6,7 @@
 #include <unordered_map>
 
 #include "shared.h"
+#include "Parallax/Parallax.hpp"
 
 // ECS includes
 #include "../ECS/Core.hpp"
@@ -35,6 +36,14 @@ private:
 
 	// Mob storage (received from server)
 	std::vector<MobState> m_mobs;
+
+	// Wave system info (received from server)
+	float m_countdownTimer;
+	unsigned int m_currentWave;
+	bool m_waveActive;
+
+	// Parallax background
+	Parallax m_parallax;
 
 	// Networking
 	std::unique_ptr<NetClient> m_netClient;
@@ -100,6 +109,7 @@ public:
 	void UpdateAndDraw(void);
 	void DrawClient(Entity entity);
 	void DrawHUD(void);
+	void DrawWaveInfo(void);
 	void DrawGameplay(void);
 	void DrawBackground(void);
 

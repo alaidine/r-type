@@ -103,6 +103,10 @@ typedef struct
     ClientState client_states[MAX_CLIENTS];
     unsigned int mob_count;
     MobState mobs[MAX_MOBS];
+    // Wave system info
+    float countdown_timer;      // Timer avant prochaine vague (en secondes)
+    unsigned int current_wave;  // Numéro de la vague actuelle (0 = attente initiale)
+    bool wave_active;           // Si une vague est en cours
 } GameStateMessage;
 
 // Connection accept data sent to client

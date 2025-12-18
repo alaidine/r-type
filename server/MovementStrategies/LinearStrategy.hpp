@@ -12,16 +12,8 @@
 
 class LinearStrategy : public IMovementStrategy {
     public:
-        LinearStrategy(float xSpeed, float ySpeed, float startX, float startY)
-            : _xSpeed(xSpeed), _ySpeed(ySpeed), _startX(startX), _startY(startY) {}
-
-        Position update([[maybe_unused]] const Position &currentPosition, float totalTime) override
-        {
-            Position newPosition;
-            newPosition.x = this->_startX - (this->_xSpeed * totalTime);
-            newPosition.y = this->_startY + (this->_ySpeed * totalTime);
-            return newPosition;
-        }
+        LinearStrategy(float xSpeed, float ySpeed, float startX, float startY);
+        Position update(const Position &currentPosition, float totalTime) override;
 
     private:
         float _xSpeed;

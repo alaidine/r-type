@@ -9,20 +9,11 @@
 #define SINUSOIDALSTRATEGY_HPP_
 
 #include "IMovementStrategy.hpp"
-#include <cmath>
 
 class SinusoidalStrategy : public IMovementStrategy {
     public:
-        SinusoidalStrategy(float xSpeed, float amplitude, float frequency, float centerLineY, float startX)
-            : _xSpeed(xSpeed), _amplitude(amplitude), _frequency(frequency), _centerLineY(centerLineY), _startX(startX) {}
-
-        Position update([[maybe_unused]] const Position &currentPosition, float totalTime) override
-        {
-            Position newPosition;
-            newPosition.x = this->_startX - (this->_xSpeed * totalTime);
-            newPosition.y = this->_centerLineY + this->_amplitude * std::sin(this->_frequency * totalTime);
-            return newPosition;
-        }
+        SinusoidalStrategy(float xSpeed, float amplitude, float frequency, float centerLineY, float startX);
+        Position update(const Position &currentPosition, float totalTime) override;
 
     private:
         float _xSpeed;

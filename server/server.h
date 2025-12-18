@@ -7,6 +7,7 @@
 
 #include "shared.h"
 #include "MovementStrategies/IMovementStrategy.hpp"
+#include "WaveManager/WaveManager.hpp"
 
 // A simple structure to represent connected clients
 struct ConnectedClient
@@ -51,8 +52,10 @@ private:
 	std::array<Mob, MAX_MOBS> m_mobs;
 	unsigned int m_mobCount = 0;
 	uint32_t m_nextMobId = 0;
-	unsigned int m_mobSpawnTimer = 0;
 	float m_totalTime = 0.0f;
+
+	// Wave management
+	WaveManager m_waveManager;
 
 	float tick_dt;
 
@@ -84,8 +87,7 @@ public:
 	int BroadcastGameState(void);
 
 	// Mob management
-	void SpawnMob(void);
-	void SpawnMobWithPattern(MovementPattern pattern);
+	void SpawnMobAtPosition(MovementPattern pattern, float yPosition);
 	void UpdateMobs(void);
 	void CheckMissileCollisions(void);
 	std::unique_ptr<IMovementStrategy> CreateStrategy(MovementPattern pattern, float startX, float startY);

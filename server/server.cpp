@@ -33,11 +33,13 @@ Server::Server()
     // Initialize mobs
     m_mobCount = 0;
     m_nextMobId = 0;
-    m_mobSpawnTimer = 0;
     for (auto& mob : m_mobs)
     {
         mob.active = false;
     }
+
+    // Initialize wave manager
+    m_waveManager.Init();
 }
 
 Server::~Server()
@@ -233,14 +235,20 @@ std::unique_ptr<IMovementStrategy> Server::CreateStrategy(MovementPattern patter
     }
 }
 
-void Server::SpawnMobWithPattern(MovementPattern pattern)
+void Server::SpawnMobAtPosition(MovementPattern pattern, float yPosition)
 {
     for (unsigned int i = 0; i < MAX_MOBS; i++)
     {
         if (!m_mobs[i].active)
         {
             float startX = (float)GAME_WIDTH;
-            float startY = (float)(rand() % (GAME_HEIGHT - MOB_HEIGHT));
+            float startY = yPosition;
+
+            // Clamp Y position to valid range
+            if (startY < 0)
+                startY = 0;
+            if (startY > GAME_HEIGHT - MOB_HEIGHT)
+                startY = (float)(GAME_HEIGHT - MOB_HEIGHT);
 
             m_mobs[i].mob_id = this->m_nextMobId++;
             m_mobs[i].x = startX;
@@ -259,21 +267,17 @@ void Server::SpawnMobWithPattern(MovementPattern pattern)
     }
 }
 
-void Server::SpawnMob(void)
-{
-    MovementPattern pattern = static_cast<MovementPattern>(rand() % 6);
-    SpawnMobWithPattern(pattern);
-}
-
 void Server::UpdateMobs(void)
 {
     this->m_totalTime += this->tick_dt;
-    this->m_mobSpawnTimer++;
 
-    if (this->m_mobSpawnTimer >= MOB_SPAWN_INTERVAL && this->m_mobCount < MAX_MOBS)
+    // Only update wave manager if there are connected clients
+    if (!m_clients.empty())
     {
-        SpawnMob();
-        this->m_mobSpawnTimer = 0;
+        // Update wave manager - spawns mobs based on wave definitions
+        this->m_waveManager.Update(this->tick_dt, [this](MovementPattern pattern, float yPos) {
+            SpawnMobAtPosition(pattern, yPos);
+        });
     }
 
     for (unsigned int i = 0; i < MAX_MOBS; i++)
@@ -370,6 +374,11 @@ int Server::BroadcastGameState(void)
             gameState.mob_count++;
         }
     }
+
+    // Wave system info
+    gameState.countdown_timer = this->m_waveManager.GetCountdownTimer();
+    gameState.current_wave = this->m_waveManager.GetCurrentWaveIndex() + 1; // 1-indexed for display
+    gameState.wave_active = this->m_waveManager.IsWaveActive();
 
     // Send to all clients
     for (auto& [id, client] : m_clients)

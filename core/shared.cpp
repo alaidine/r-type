@@ -132,6 +132,11 @@ void SerializeGameStateMessage(NetBuffer& buffer, const GameStateMessage& msg)
     {
         SerializeMobState(buffer, msg.mobs[i]);
     }
+    
+    // Wave system info
+    buffer.WriteFloat(msg.countdown_timer);
+    buffer.WriteUInt32(msg.current_wave);
+    buffer.WriteUInt8(msg.wave_active ? 1 : 0);
 }
 
 GameStateMessage DeserializeGameStateMessage(NetBuffer& buffer)
@@ -156,6 +161,11 @@ GameStateMessage DeserializeGameStateMessage(NetBuffer& buffer)
     {
         msg.mobs[i] = DeserializeMobState(buffer);
     }
+    
+    // Wave system info
+    msg.countdown_timer = buffer.ReadFloat();
+    msg.current_wave = buffer.ReadUInt32();
+    msg.wave_active = buffer.ReadUInt8() != 0;
     
     return msg;
 }

@@ -32,6 +32,11 @@ Client::Client()
     m_mob = { 0 };
     m_localPlayerEntity = 0;
 
+    // Wave system
+    m_countdownTimer = 0.0f;
+    m_currentWave = 0;
+    m_waveActive = false;
+
     m_missileAnimationRectangles[0] = { 0, 128, 25, 22 };
     m_missileAnimationRectangles[1] = { 25, 128, 31, 22 };
     m_missileAnimationRectangles[2] = { 56, 128, 40, 22 };
@@ -269,6 +274,11 @@ void Client::HandleGameStateMessage(NetBuffer& buffer)
         m_mobs.push_back(msg.mobs[i]);
     }
 
+    // Update wave system info
+    this->m_countdownTimer = msg.countdown_timer;
+    this->m_currentWave = msg.current_wave;
+    this->m_waveActive = msg.wave_active;
+
     DestroyDisconnectedClients();
 }
 
@@ -411,19 +421,55 @@ void Client::DrawHUD(void)
 
 void Client::DrawBackground(void)
 {
-    float frameWidth = GAME_WIDTH / 4;
-    float frameHeight = GAME_HEIGHT / 4;
-    Rectangle source_rect = { 0.0f, 0.0f, (float)frameWidth, (float)frameHeight };
-    Rectangle dest_rect = { 0.0f , 0.0f, GAME_WIDTH, GAME_HEIGHT};
-    Vector2 origin = { 0.0f, 0.0f };
+    // Utilise le parallax pour dessiner le fond
+    this->m_parallax.Draw();
+}
 
-    DrawTexturePro(m_background, source_rect, dest_rect, origin, 0.0f, WHITE);
+void Client::DrawWaveInfo(void)
+{
+    // Afficher les infos de vague en haut à droite
+    int xPos = GAME_WIDTH - 200;
+    int yPos = 10;
+
+    if (this->m_countdownTimer > 0.0f)
+    {
+        // Afficher le countdown
+        int seconds = static_cast<int>(this->m_countdownTimer) + 1;
+        
+        // Fond semi-transparent pour le timer
+        DrawRectangle(xPos - 10, yPos - 5, 195, 60, Fade(BLACK, 0.7f));
+        
+        if (this->m_currentWave == 0 || this->m_currentWave == 1)
+        {
+            // Avant la première vague
+            DrawText("GET READY!", xPos, yPos, 20, YELLOW);
+        }
+        else
+        {
+            // Entre les vagues
+            DrawText(TextFormat("WAVE %d", this->m_currentWave), xPos, yPos, 20, GREEN);
+            DrawText("INCOMING", xPos + 80, yPos, 20, YELLOW);
+        }
+        
+        // Grand timer
+        DrawText(TextFormat("%d", seconds), xPos + 70, yPos + 25, 30, WHITE);
+    }
+    else if (this->m_waveActive)
+    {
+        // Vague en cours
+        DrawRectangle(xPos - 10, yPos - 5, 195, 35, Fade(BLACK, 0.7f));
+        DrawText(TextFormat("WAVE %d", this->m_currentWave), xPos, yPos, 24, GREEN);
+    }
 }
 
 void Client::DrawGameplay(void)
 {
+    // Update parallax animation
+    float deltaTime = GetFrameTime();
+    this->m_parallax.Update(deltaTime);
+
     BeginDrawing();
-    ClearBackground(LIGHTGRAY);
+    ClearBackground(BLACK);
 
     if (m_disconnected)
     {
@@ -447,6 +493,9 @@ void Client::DrawGameplay(void)
 
         DrawMissiles();
         DrawMobs();
+
+        // Toujours afficher les infos de vague
+        DrawWaveInfo();
 
         if (m_displayHUD)
         {
@@ -587,6 +636,9 @@ void Client::Init(void)
     m_player = LoadTexture("resources/sprites/player_r-9c_war-head.png");
     m_background = LoadTexture("resources/sprites/space_background.png");
     m_mob = LoadTexture("resources/sprites/mob_bydo_minions.png");
+
+    // Initialize parallax background
+    this->m_parallax.Init();
 
     InitECS();
 }
