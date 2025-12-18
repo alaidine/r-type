@@ -229,6 +229,38 @@ void Client::HandleGameStateMessage(NetBuffer& buffer)
 
             m_updatedIds[i] = state.client_id;
         }
+        else
+        {
+            if (ClientExists(m_localClientId))
+            {
+                // Correct the local player position with the position sent by the server.
+                auto it = m_clientEntities.find(m_localClientId);
+                if (it == m_clientEntities.end()) {
+                    TraceLog(LOG_WARNING, "UpdateClient: local client not found");
+                    return;
+                }
+
+                Entity entity = it->second;
+
+                auto& pos = m_ecsCore.GetComponent<Position>(entity);
+
+                TraceLog(
+                    LOG_INFO, "Position after correction: x: %d, y %d, Position before correction x: %d, y: %d",
+                    state.x,
+                    state.y,
+                    (int)pos.position.x,
+                    (int)pos.position.y);
+
+                pos.position.x = (float)state.x;
+                pos.position.y = (float)state.y;
+
+                m_remoteMissiles[m_localClientId].clear();
+                for (unsigned int i = 0; i < state.missile_count; i++)
+                {
+                    m_remoteMissiles[m_localClientId].push_back(state.missiles[i]);
+                }
+            }
+        }
     }
 
     m_mobs.clear();
