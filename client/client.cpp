@@ -90,13 +90,10 @@ void Client::SpawnLocalClient(int x, int y, uint32_t client_id) {
   TraceLog(LOG_INFO,
            "Received spawn message, position: (%d, %d), client id: %d", x, y,
            client_id);
-
   m_localClientId = client_id;
-
   m_localPlayerEntity = Prefab::MakeClient(m_ecsCore, (float)x, (float)y,
                                            client_id, true, m_player);
   m_clientEntities[client_id] = m_localPlayerEntity;
-
   m_spawned = true;
 }
 
@@ -104,7 +101,6 @@ void Client::HandleConnectAccept(NetBuffer &buffer) {
   ConnectAcceptData data = DeserializeConnectAcceptData(buffer);
 
   TraceLog(LOG_INFO, "Connection accepted by server");
-
   SpawnLocalClient(data.spawn_x, data.spawn_y, data.client_id);
   m_connected = true;
 }
@@ -113,7 +109,6 @@ void Client::HandleConnectReject(NetBuffer &buffer) {
   int code = buffer.ReadInt32();
 
   TraceLog(LOG_INFO, "Connection rejected by server (code: %d)", code);
-
   m_disconnected = true;
   m_serverCloseCode = code;
 }
@@ -125,14 +120,11 @@ bool Client::ClientExists(uint32_t client_id) {
 void Client::CreateClient(ClientState state) {
   TraceLog(LOG_DEBUG, "CreateClient %d", state.client_id);
   assert(m_clientCount < MAX_CLIENTS - 1);
-
   Entity clientEntity =
       Prefab::MakeClient(m_ecsCore, (float)state.x, (float)state.y,
                          state.client_id, false, m_player);
   m_clientEntities[state.client_id] = clientEntity;
-
   m_clientCount++;
-
   TraceLog(LOG_INFO, "New remote client (ID: %d)", state.client_id);
 }
 
@@ -408,8 +400,8 @@ void Client::DrawWaveInfo(void) {
     } else {
       // Entre les vagues
       DrawText(TextFormat("WAVE %d", this->m_currentWave), xPos, yPos, 20,
-               GREEN);
-      DrawText("INCOMING", xPos + 80, yPos, 20, YELLOW);
+               YELLOW);
+      DrawText(" INCOMING", xPos + 80, yPos, 20, YELLOW);
     }
 
     // Grand timer
