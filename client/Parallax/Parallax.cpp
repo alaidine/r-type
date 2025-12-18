@@ -24,7 +24,9 @@ void Parallax::Init(void) {
   layer1.scale = 1.0f;
   if (layer1.texture.id != 0)
     this->_layers.push_back(layer1);
-
+  
+  /*
+  
   // Layer 2 : Étoiles moyennes
   ParallaxLayer layer2;
   layer2.texture = LoadTexture("resources/sprites/parallax/layer2.png");
@@ -43,6 +45,8 @@ void Parallax::Init(void) {
   if (layer3.texture.id != 0)
     this->_layers.push_back(layer3);
 
+
+
   // Layer 4 : Premier plan (poussière spatiale/étoiles très proches)
   ParallaxLayer layer4;
   layer4.texture = LoadTexture("resources/sprites/parallax/layer4.png");
@@ -51,6 +55,8 @@ void Parallax::Init(void) {
   layer4.scale = 1.0f;
   if (layer4.texture.id != 0)
     this->_layers.push_back(layer4);
+
+  */
 }
 
 void Parallax::Update(float deltaTime) {

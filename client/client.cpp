@@ -396,7 +396,7 @@ void Client::DrawWaveInfo(void) {
 
     if (this->m_currentWave == 0 || this->m_currentWave == 1) {
       // Avant la première vague
-      DrawText("GET READY!", xPos, yPos, 20, YELLOW);
+      DrawText("GET READY!", xPos + 35, yPos, 20, YELLOW);
     } else {
       // Entre les vagues
       DrawText(TextFormat("WAVE %d", this->m_currentWave), xPos, yPos, 20,
@@ -405,7 +405,7 @@ void Client::DrawWaveInfo(void) {
     }
 
     // Grand timer
-    DrawText(TextFormat("%d", seconds), xPos + 70, yPos + 25, 30, WHITE);
+    DrawText(TextFormat("%d", seconds), xPos + 80, yPos + 25, 30, WHITE);
   } else if (this->m_waveActive) {
     // Vague en cours
     DrawRectangle(xPos - 10, yPos - 5, 195, 35, Fade(BLACK, 0.7f));
