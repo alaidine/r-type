@@ -6,6 +6,7 @@
 #include <unordered_map>
 
 #include "shared.h"
+#include "MovementStrategies/IMovementStrategy.hpp"
 
 // A simple structure to represent connected clients
 struct ConnectedClient
@@ -16,14 +17,27 @@ struct ConnectedClient
 	unsigned int last_heard_tick; // For timeout detection
 };
 
-// Mob structure for server-side management
-typedef struct
+// Movement pattern types for mobs
+enum class MovementPattern {
+	LINEAR,
+	SINUSOIDAL,
+	ZIGZAG,
+	CIRCULAR,
+	DIVE,
+	FIGURE8
+};
+
+// Mob structure for server-side management with movement strategy
+struct Mob
 {
 	uint32_t mob_id;
 	float x;
 	float y;
 	bool active;
-} Mob;
+	float spawnTime;
+	MovementPattern pattern;
+	std::unique_ptr<IMovementStrategy> strategy;
+};
 
 class Server
 {
@@ -38,6 +52,7 @@ private:
 	unsigned int m_mobCount = 0;
 	uint32_t m_nextMobId = 0;
 	unsigned int m_mobSpawnTimer = 0;
+	float m_totalTime = 0.0f;
 
 	float tick_dt;
 
@@ -70,6 +85,8 @@ public:
 
 	// Mob management
 	void SpawnMob(void);
+	void SpawnMobWithPattern(MovementPattern pattern);
 	void UpdateMobs(void);
 	void CheckMissileCollisions(void);
+	std::unique_ptr<IMovementStrategy> CreateStrategy(MovementPattern pattern, float startX, float startY);
 };

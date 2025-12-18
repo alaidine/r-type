@@ -7,8 +7,11 @@ add_executable(${SERVER}
 # Link with core library (provides all shared dependencies)
 target_link_libraries(${SERVER} PRIVATE ${CORE_LIB})
 
-# Include current directory for server-specific headers
-target_include_directories(${SERVER} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+# Include current directory for server-specific headers and MovementStrategies
+target_include_directories(${SERVER} PRIVATE 
+    ${CMAKE_CURRENT_SOURCE_DIR}
+    ${CMAKE_CURRENT_SOURCE_DIR}/MovementStrategies
+)
 
 # Set output directory
 set_target_properties(${SERVER} PROPERTIES

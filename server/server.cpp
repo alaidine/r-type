@@ -3,6 +3,13 @@
 #include <cstdlib>
 #include <cstring>
 
+#include "MovementStrategies/LinearStrategy.hpp"
+#include "MovementStrategies/SinusoidalStrategy.hpp"
+#include "MovementStrategies/ZigZagStrategy.hpp"
+#include "MovementStrategies/CircularStrategy.hpp"
+#include "MovementStrategies/DiveStrategy.hpp"
+#include "MovementStrategies/Figure8Strategy.hpp"
+
 Server* g_serverInstance = nullptr;
 
 static void SigintHandler(int dummy)
@@ -203,43 +210,89 @@ void Server::CheckClientTimeouts(void)
     }
 }
 
-void Server::SpawnMob(void)
+std::unique_ptr<IMovementStrategy> Server::CreateStrategy(MovementPattern pattern, float startX, float startY)
+{
+    float baseSpeed = 80.0f;
+    
+    switch (pattern)
+    {
+        case MovementPattern::LINEAR:
+            return std::make_unique<LinearStrategy>(baseSpeed, 0.0f, startX, startY);
+        case MovementPattern::SINUSOIDAL:
+            return std::make_unique<SinusoidalStrategy>(baseSpeed, 60.0f, 3.0f, startY, startX);
+        case MovementPattern::ZIGZAG:
+            return std::make_unique<ZigZagStrategy>(baseSpeed, 50.0f, 4.0f, startX, startY);
+        case MovementPattern::CIRCULAR:
+            return std::make_unique<CircularStrategy>(baseSpeed * 0.8f, 40.0f, 4.0f, startX, startY);
+        case MovementPattern::DIVE:
+            return std::make_unique<DiveStrategy>(baseSpeed, 120.0f, 3.0f, startX, startY);
+        case MovementPattern::FIGURE8:
+            return std::make_unique<Figure8Strategy>(baseSpeed * 0.6f, 50.0f, 30.0f, 2.5f, startX, startY);
+        default:
+            return std::make_unique<LinearStrategy>(baseSpeed, 0.0f, startX, startY);
+    }
+}
+
+void Server::SpawnMobWithPattern(MovementPattern pattern)
 {
     for (unsigned int i = 0; i < MAX_MOBS; i++)
     {
         if (!m_mobs[i].active)
         {
-            m_mobs[i].mob_id = m_nextMobId++;
-            m_mobs[i].x = (float)GAME_WIDTH;
-            m_mobs[i].y = (float)(rand() % (GAME_HEIGHT - MOB_HEIGHT));
-            m_mobs[i].active = true;
-            m_mobCount++;
+            float startX = (float)GAME_WIDTH;
+            float startY = (float)(rand() % (GAME_HEIGHT - MOB_HEIGHT));
 
-            TraceLog(LOG_INFO, "Spawned mob (ID: %d) at position (%f, %f)", m_mobs[i].mob_id, m_mobs[i].x, m_mobs[i].y);
+            m_mobs[i].mob_id = this->m_nextMobId++;
+            m_mobs[i].x = startX;
+            m_mobs[i].y = startY;
+            m_mobs[i].active = true;
+            m_mobs[i].spawnTime = this->m_totalTime;
+            m_mobs[i].pattern = pattern;
+            m_mobs[i].strategy = CreateStrategy(pattern, startX, startY);
+            this->m_mobCount++;
+
+            const char* patternNames[] = {"LINEAR", "SINUSOIDAL", "ZIGZAG", "CIRCULAR", "DIVE", "FIGURE8"};
+            TraceLog(LOG_INFO, "Spawned mob (ID: %d) with pattern %s at position (%f, %f)",
+                m_mobs[i].mob_id, patternNames[static_cast<int>(pattern)], m_mobs[i].x, m_mobs[i].y);
             break;
         }
     }
 }
 
+void Server::SpawnMob(void)
+{
+    MovementPattern pattern = static_cast<MovementPattern>(rand() % 6);
+    SpawnMobWithPattern(pattern);
+}
+
 void Server::UpdateMobs(void)
 {
-    m_mobSpawnTimer++;
-    if (m_mobSpawnTimer >= MOB_SPAWN_INTERVAL && m_mobCount < MAX_MOBS)
+    this->m_totalTime += this->tick_dt;
+    this->m_mobSpawnTimer++;
+
+    if (this->m_mobSpawnTimer >= MOB_SPAWN_INTERVAL && this->m_mobCount < MAX_MOBS)
     {
         SpawnMob();
-        m_mobSpawnTimer = 0;
+        this->m_mobSpawnTimer = 0;
     }
 
     for (unsigned int i = 0; i < MAX_MOBS; i++)
     {
-        if (m_mobs[i].active)
+        if (m_mobs[i].active && m_mobs[i].strategy)
         {
-            m_mobs[i].x -= MOB_SPEED;
+            float mobTime = this->m_totalTime - m_mobs[i].spawnTime;
+            Position currentPos = {m_mobs[i].x, m_mobs[i].y};
+            Position newPos = m_mobs[i].strategy->update(currentPos, mobTime);
 
-            if (m_mobs[i].x < -MOB_WIDTH)
+            m_mobs[i].x = newPos.x;
+            m_mobs[i].y = newPos.y;
+
+            if (m_mobs[i].x < -MOB_WIDTH || m_mobs[i].x > GAME_WIDTH + 100 ||
+                m_mobs[i].y < -MOB_HEIGHT || m_mobs[i].y > GAME_HEIGHT + MOB_HEIGHT)
             {
                 m_mobs[i].active = false;
-                m_mobCount--;
+                m_mobs[i].strategy.reset();
+                this->m_mobCount--;
                 TraceLog(LOG_INFO, "Mob (ID: %d) went off screen", m_mobs[i].mob_id);
             }
         }
@@ -256,8 +309,8 @@ void Server::CheckMissileCollisions(void)
             Rectangle missileRect = {
                 missile.pos.x,
                 missile.pos.y,
-                missile.rect.width * 2.0f,
-                missile.rect.height * 2.0f
+                missile.rect.width,
+                missile.rect.height
             };
 
             for (unsigned int i = 0; i < MAX_MOBS; i++)
